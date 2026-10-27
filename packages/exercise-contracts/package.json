@@ -1,0 +1,24 @@
+{
+  "name": "@fitpilot/exercise-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared exercise metadata + session-event contracts (browser, vision engine, API). Blueprint §12–13.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "export:jsonschema": "tsx scripts/export-jsonschema.ts"
+  },
+  "dependencies": {
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^4"
+  }
+}

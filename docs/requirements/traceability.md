@@ -1,0 +1,35 @@
+# Requirements traceability
+
+Source: [`fitpilot-blueprint-v1.md`](./fitpilot-blueprint-v1.md). Every PR that touches an FR updates its row.
+Status: ⬜ not started · 🟨 in progress · ✅ acceptance criteria proven by tests
+
+| FR    | Title                      | P   | Milestone | Code                                                                      | Tests proving acceptance                                                     | Status |
+| ----- | -------------------------- | --- | --------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------ |
+| FR-01 | Auth, roles, profiles      | P0  | M0        | `services/api/app/api/v1/profiles.py`, `apps/web/src/features/onboarding` | cross-member access denied (API integration)                                 | ⬜     |
+| FR-02 | Workout planning           | P0  | M3        | `services/api/app/services/plans`                                         | catalogue-only exercises; invalid plan rejected/repaired/escalated           | ⬜     |
+| FR-03 | 3D exercise engine         | P0  | M1        | `apps/web/src/features/exercise-viewer`, `assets/exercises`               | play/pause/replay/reset component tests; missing-asset fallback              | ⬜     |
+| FR-04 | Camera + pose              | P0  | M2        | `apps/web/src/features/live-coaching`                                     | e2e with fake camera; denial + low-confidence states                         | ⬜     |
+| FR-05 | Movement analysis          | P0  | M2–M4     | `packages/exercise-rules`                                                 | unit (state machine) ✅ seed; **vision regression vs annotated fixtures** ⬜ | 🟨     |
+| FR-06 | Real-time feedback         | P0  | M3        | `packages/exercise-rules`, `live-coaching`                                | every cue carries rule_id + measurements                                     | 🟨     |
+| FR-07 | Session management         | P0  | M3        | `services/api` sessions, `packages/exercise-contracts` events             | refresh-and-retrieve e2e; idempotent completion                              | ⬜     |
+| FR-08 | Nutrition                  | P1  | M4        | `services/api/app/services/nutrition`                                     | schema + policy checks                                                       | ⬜     |
+| FR-09 | AI coaching assistant      | P1  | M4        | `services/api/app/services/coaching`                                      | no success claim before backend confirms (eval)                              | ⬜     |
+| FR-10 | Progress + adaptation      | P1  | M4        | `services/api`, `apps/web/src/features/dashboard`                         | adjustment uses recorded history only                                        | ⬜     |
+| FR-11 | Trainer/admin dashboard    | P1  | M5        | `services/api/app/services/gym_operations`                                | unrelated trainer denied; audit event written                                | ⬜     |
+| FR-12 | Notifications/business ops | P2  | later     | —                                                                         | —                                                                            | ⬜     |
+| FR-13 | Observability + evaluation | P0  | M0→M5     | `services/api/app/services/evaluation`, logging                           | failure produces diagnosable event without PII                               | ⬜     |
+
+## MVP Definition of Done (blueprint §16) — 0/12
+
+- [ ] Users can register, sign in, and manage their profiles.
+- [ ] A personalized workout plan is generated, validated, and saved.
+- [ ] A rigged 3D avatar demonstrates all three supported exercises.
+- [ ] The webcam pose tracker works on the documented supported devices and browsers.
+- [ ] Squat, biceps curl, and push-up analysis have tested exercise-specific rules.
+- [ ] Repetition counting and supported feedback are evaluated against annotated test examples.
+- [ ] The application handles poor tracking confidence without fabricating corrections.
+- [ ] A member can complete a workout and retrieve its saved history.
+- [ ] Nutrition planning and coaching chat respect approved data and application policies.
+- [ ] A trainer can review an assigned member and handle escalations.
+- [ ] Core authorization, privacy, error handling, and regression tests pass.
+- [ ] The application is deployed, documented, monitored, and reproducible from the repository.

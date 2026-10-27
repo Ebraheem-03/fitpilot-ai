@@ -1,0 +1,22 @@
+{
+  "name": "@fitpilot/exercise-rules",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vision analysis pipeline stages 2–5 (blueprint §8): features, smoothing, rep state machines, versioned rules, feedback selection. Pure TS, no DOM — runs in a Web Worker.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fitpilot/exercise-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5",
+    "vitest": "^4"
+  }
+}

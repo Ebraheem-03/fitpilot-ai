@@ -1,0 +1,28 @@
+{
+  "id": "bodyweight_squat",
+  "name": "Bodyweight Squat",
+  "version": 1,
+  "equipment": [],
+  "target_muscles": ["quadriceps", "glutes", "adductors"],
+  "camera_views": ["side"],
+  "animation_asset": "squat.glb",
+  "supported_capabilities": [
+    "pose_tracking",
+    "rep_counting",
+    "phase_detection",
+    "rule_based_feedback"
+  ],
+  "required_landmarks": ["left_hip", "left_knee", "left_ankle", "left_shoulder"],
+  "ruleset_version": 1,
+  "phases": ["standing", "descending", "bottom", "ascending"],
+  "instructions": [
+    "Stand with feet roughly shoulder-width apart, toes slightly turned out.",
+    "Sit the hips back and down while keeping your chest up.",
+    "Lower until your thighs are about parallel to the floor, or as far as is comfortable.",
+    "Push through your whole foot to stand back up."
+  ],
+  "technique_considerations": [
+    "Keep heels on the floor throughout.",
+    "Let knees track in line with your toes."
+  ]
+}

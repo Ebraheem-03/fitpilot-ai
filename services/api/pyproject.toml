@@ -1,0 +1,38 @@
+[project]
+name = "fitpilot-api"
+version = "0.1.0"
+description = "FitPilot AI backend: auth, profiles, plans, sessions, AI orchestration (blueprint §4)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.162",
+  "uvicorn[standard]>=0.54",
+  "pydantic>=2.14",
+  "pydantic-settings>=2.16",
+  "sqlalchemy>=2.1",
+  "psycopg[binary]>=3.3",
+  "alembic>=1.20",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.1",
+  "httpx>=0.28",
+  "ruff>=0.17",
+  "mypy>=2.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "ASYNC", "RUF"]
+ignore = ["S101"] # assert is fine in tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]

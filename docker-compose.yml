@@ -1,0 +1,32 @@
+# Local dev infrastructure. Production DB/auth/storage = Supabase (ADR-0003).
+# `docker compose up -d db` gives a Postgres 17 + pgvector that mirrors Supabase's engine.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: fitpilot
+      POSTGRES_PASSWORD: fitpilot
+      POSTGRES_DB: fitpilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitpilot"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./services/api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://fitpilot:fitpilot@db:5432/fitpilot
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["full"]
+
+volumes:
+  pgdata:

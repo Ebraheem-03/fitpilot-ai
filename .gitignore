@@ -1,0 +1,46 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+out/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+
+# env & secrets — never commit real values
+.env
+.env.*
+!.env.example
+
+# claude code (personal, per-machine)
+.claude/settings.local.json
+.claude/ledger/
+CLAUDE.local.md
+
+# test artefacts
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# raw camera recordings never go in git (privacy, size) — only annotated derived landmarks
+data/evaluation-fixtures/vision/**/*.mp4
+data/evaluation-fixtures/vision/**/*.webm
+data/evaluation-fixtures/vision/**/*.mov
+
+# os / editors
+.DS_Store
+.idea/
+*.swp
