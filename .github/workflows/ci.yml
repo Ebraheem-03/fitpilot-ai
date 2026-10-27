@@ -31,6 +31,22 @@ jobs:
     defaults:
       run:
         working-directory: services/api
+    # Same image as docker-compose.yml so integration tests run against the real engine.
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: fitpilot
+          POSTGRES_PASSWORD: fitpilot
+          POSTGRES_DB: fitpilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fitpilot"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://fitpilot:fitpilot@localhost:5432/fitpilot
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
