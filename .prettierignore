@@ -7,3 +7,7 @@ services/api
 docs/requirements/fitpilot-blueprint-v1.md
 assets
 *.glb
+
+# local Supabase (generated per machine / CI job)
+supabase/signing_keys.json
+supabase/.temp
