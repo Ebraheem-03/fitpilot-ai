@@ -6,7 +6,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import Engine, create_engine, text
 
 from app.models import Base
-from tests.db.conftest import alembic_config
+from tests.conftest import alembic_config
 
 EXPECTED_TABLES = {"users", "member_profiles", "gyms", "gym_memberships"}
 
