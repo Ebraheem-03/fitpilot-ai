@@ -1,6 +1,6 @@
 # ADR-0004: One orchestrated LLM workflow behind a provider abstraction, with narrow tools
 
-- **Status:** accepted
+- **Status:** accepted · default provider amended by ADR-0006 (proposed: Groq free tier, $0 budget)
 - **Date:** 2026-10-27
 - **Requirements:** FR-02, FR-08, FR-09, FR-13, blueprint §9–10
 
