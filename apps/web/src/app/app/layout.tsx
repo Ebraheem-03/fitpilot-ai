@@ -1,17 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { SignOutButton } from "@/features/auth/SignOutButton";
 import { AppNav } from "@/features/shell/AppNav";
-import { ApiError, getMe } from "@/lib/api";
+import { getMe } from "@/lib/api";
 
 async function RoleNav() {
   await connection();
-  const me = await getMe().catch((e: unknown) => {
-    if (e instanceof ApiError && e.status === 401) redirect("/sign-in");
-    throw e;
-  });
+  const me = await getMe();
   return <AppNav role={me.role} />;
 }
 

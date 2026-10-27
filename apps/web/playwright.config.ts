@@ -29,7 +29,7 @@ export default defineConfig({
       command: `pnpm exec next dev --port ${WEB_PORT}`,
       url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: false,
-      env: { NEXT_PUBLIC_API_BASE_URL: `http://localhost:${API_PORT}` },
+      env: { API_BASE_URL: `http://localhost:${API_PORT}` },
     },
   ],
 });

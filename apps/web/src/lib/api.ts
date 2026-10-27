@@ -1,4 +1,5 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { getAccessToken } from "@/lib/supabase/server";
 
 import type { Me, Profile, ProfileInput } from "@/lib/api-types";
@@ -14,11 +15,24 @@ export class ApiError extends Error {
   }
 }
 
-/** Server-side call to FastAPI with the caller's Supabase access token (ADR-0003). */
+// Where bearer tokens are sent: server-only and read at runtime, never a build-time public var.
+function apiBaseUrl(): string {
+  const url = process.env.API_BASE_URL;
+  if (url) return url;
+  if (process.env.NODE_ENV !== "production") return "http://localhost:8000";
+  throw new Error("API_BASE_URL must be set (see .env.example)");
+}
+
+/**
+ * Server-side call to FastAPI with the caller's Supabase access token (ADR-0003).
+ * If the API rejects a session that Supabase still considers valid (e.g. misconfigured issuer,
+ * deleted user), go to /session-expired rather than /sign-in: the proxy would bounce a
+ * still-signed-in user from /sign-in back to /app, looping forever.
+ */
 async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = await getAccessToken();
-  if (!token) throw new ApiError(401, null);
-  return fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1${path}`, {
+  if (!token) redirect("/session-expired");
+  const res = await fetch(`${apiBaseUrl()}/api/v1${path}`, {
     ...init,
     cache: "no-store",
     headers: {
@@ -27,6 +41,8 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
       "Content-Type": "application/json",
     },
   });
+  if (res.status === 401) redirect("/session-expired");
+  return res;
 }
 
 async function json<T>(res: Response): Promise<T> {

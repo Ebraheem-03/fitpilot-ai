@@ -6,6 +6,7 @@ Only asymmetric algorithms are accepted; there is no shared secret anywhere in t
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import TypedDict
 
 import jwt
 
@@ -13,11 +14,29 @@ from app.core.config import Settings
 
 AUDIENCE = "authenticated"
 ALLOWED_ALGS = ("ES256", "RS256")
-JWKS_CACHE_SECONDS = 600  # matches Supabase's edge cache so key rotation still propagates
+
+
+class _JwksOptions(TypedDict):
+    cache_jwk_set: bool
+    lifespan: float
+    cooldown_duration: float
+    timeout: float
+
+
+JWKS_CLIENT_OPTIONS: _JwksOptions = {
+    "cache_jwk_set": True,
+    "lifespan": 600,  # matches Supabase's edge cache so key rotation still propagates
+    "cooldown_duration": 60,  # unknown kids trigger at most one refetch per minute
+    "timeout": 5,
+}
 
 
 class InvalidToken(Exception):
     """Token rejected. The message is a short reason code, safe to log (never the token)."""
+
+
+class AuthUnavailable(Exception):
+    """The JWKS endpoint couldn't be reached: a dependency outage, not bad credentials."""
 
 
 @dataclass(frozen=True)
@@ -33,7 +52,7 @@ def issuer(settings: Settings) -> str:
 
 @lru_cache
 def _jwks_client(jwks_url: str) -> jwt.PyJWKClient:
-    return jwt.PyJWKClient(jwks_url, cache_keys=True, lifespan=JWKS_CACHE_SECONDS)
+    return jwt.PyJWKClient(jwks_url, **JWKS_CLIENT_OPTIONS)
 
 
 def verify_access_token(token: str, settings: Settings) -> VerifiedToken:
@@ -47,6 +66,8 @@ def verify_access_token(token: str, settings: Settings) -> VerifiedToken:
     iss = issuer(settings)
     try:
         key = _jwks_client(iss + "/.well-known/jwks.json").get_signing_key_from_jwt(token).key
+    except jwt.PyJWKClientConnectionError as e:
+        raise AuthUnavailable("jwks_unreachable") from e
     except jwt.PyJWTError as e:
         raise InvalidToken("unknown_key") from e
 

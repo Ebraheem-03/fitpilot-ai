@@ -128,3 +128,14 @@ def test_bad_tokens_are_401_and_provision_nobody(
     assert r.status_code == 401
     assert r.headers.get("www-authenticate") == "Bearer"
     assert db.scalar(select(func.count()).select_from(User)) == before
+
+
+def test_jwks_outage_is_503_not_401(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Down:
+        def get_signing_key_from_jwt(self, token: str) -> None:
+            raise jwt.PyJWKClientConnectionError("connection refused")
+
+    monkeypatch.setattr(security, "_jwks_client", lambda url: Down())
+    assert client.get("/me", headers=bearer(uuid.uuid4())).status_code == 503

@@ -1,13 +1,17 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { ApiError, createProfile, type ProfileInput } from "@/lib/api";
 
 export type OnboardingState = { error: string | null };
 
-function optionalInt(value: FormDataEntryValue | null): number | null {
+// Non-numeric input is passed through as text so the API rejects it (422) instead of JSON
+// silently turning NaN into null ("not set").
+function optionalInt(value: FormDataEntryValue | null): number | string | null {
   const text = String(value ?? "").trim();
-  return text === "" ? null : Number(text);
+  if (text === "") return null;
+  const n = Number(text);
+  return Number.isNaN(n) ? text : n;
 }
 
 export async function createProfileAction(
@@ -26,11 +30,11 @@ export async function createProfileAction(
   try {
     await createProfile(input);
   } catch (e) {
+    unstable_rethrow(e); // let redirect("/session-expired") from apiFetch through
     if (e instanceof ApiError && e.status === 409) redirect("/app/profile");
     if (e instanceof ApiError && e.status === 422) {
       return { error: "Some answers aren't valid. Please check them and try again." };
     }
-    if (e instanceof ApiError && e.status === 401) redirect("/sign-in");
     return { error: "We couldn't save your profile. Please try again." };
   }
   redirect("/app/profile");

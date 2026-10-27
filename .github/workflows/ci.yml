@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege for the workflow token (M0 security review).
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -59,6 +63,7 @@ jobs:
   e2e:
     needs: web-and-packages
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
