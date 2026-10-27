@@ -1,14 +1,14 @@
 # Progress
 
-Current milestone: **M0 — Foundation** — exit met locally 2026-10-28; awaiting green CI on the stacked PRs + merge
-Next up: merge M0 PRs, apply migrations to the hosted Supabase project, then `/kickoff-milestone M1`.
+Current milestone: **M1 — 3D trainer** (not yet planned). M0 done 2026-10-28.
+Next up: `/kickoff-milestone M1` — first decision: avatar source/licence (self-rigged vs licensed).
 
 > Claude: read this file at the start of a session (the SessionStart hook prints the top of it).
 > Update it with `/handoff` at the end of a session. Keep it short — history lives in git.
 
 ## Milestones (blueprint §11)
 
-### M0 — Foundation (wk 1–2)
+### M0 — Foundation (wk 1–2) ✅ done 2026-10-28
 
 - [x] Monorepo, pnpm + uv, lint, format, tests, CI workflow
 - [x] Exercise contract (zod) + JSON Schema export + Python mirror with parity test
@@ -76,7 +76,7 @@ Estimates: S ≤ ½ day · M 1–2 days · L 3+ days. Owner "main" = main sessio
 
 ### M5 — Gym operations + hardening (wk 11–12)
 
-**M0 evidence (2026-10-28):** `make verify` green (66 API tests incl. Postgres integration, 21 web unit), `make e2e` 13/13 vs local Supabase (EXIT test: sign up → onboard → sign out → sign in → own profile; cross-member denial; axe). Independent code + security reviews done; all should-fix items addressed on `fix/m0-review`.
+**M0 evidence (2026-10-28):** `make verify` green (66 API tests incl. Postgres integration, 21 web unit), `make e2e` 13/13 vs local Supabase (EXIT test: sign up → onboard → sign out → sign in → own profile; cross-member denial; axe). Independent code + security reviews done; all should-fix items addressed (#24). Merged to main via #15–#24 (main `8451ea4`, CI green incl. e2e). Hosted Supabase: migrations 0001–0002 applied via the IPv4 session pooler (RLS on all tables, 0 anon/authenticated grants).
 
 ## Open decisions
 
@@ -86,6 +86,7 @@ Estimates: S ≤ ½ day · M 1–2 days · L 3+ days. Owner "main" = main sessio
 
 ## Session log (newest first, 1 line each)
 
+- 2026-10-28 — M0 merged (#15–#24), hosted migrations applied, spike test user removed.
 - 2026-10-28 — M0 S2–S8: DB+RLS, JWKS auth, profiles API, logging, web auth, shell/onboarding/profile; reviews fixed.
 
 - 2026-10-27 — Scaffold + Claude Code setup created.
