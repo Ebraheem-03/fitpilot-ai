@@ -1,9 +1,10 @@
 from fastapi import APIRouter
 
-from app.api.v1 import exercises
+from app.api.v1 import exercises, spike
 
 api_router = APIRouter()
 api_router.include_router(exercises.router, prefix="/exercises", tags=["exercises"])
+api_router.include_router(spike.router, prefix="/spike", tags=["spike"])
 
 # Blueprint §7 — add routers here as milestones land:
 #   profiles (FR-01, M0) · training-plans (FR-02, M3) · workout-sessions (FR-07, M3)
