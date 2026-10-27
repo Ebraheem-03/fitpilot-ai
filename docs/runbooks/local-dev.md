@@ -31,3 +31,13 @@ Regenerating contracts after editing `packages/exercise-contracts`:
 pnpm --filter @fitpilot/exercise-contracts export:jsonschema
 cd services/api && uv run pytest tests/test_contract_parity.py
 ```
+
+### Hosted Supabase database from a laptop (IPv4)
+
+The direct host `db.<ref>.supabase.co` is **IPv6-only** on free projects; on an IPv4-only network it fails with `failed to resolve host`. Use the **session pooler** instead (same database, IPv4, supports migrations):
+
+```
+DATABASE_URL=postgresql+psycopg://postgres.<ref>:<db-password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+```
+
+FitPilot's dev project: `<ref>` = `jpotdwvedljsablnzlot`, region `eu-west-1`. Apply migrations with `cd services/api && uv run alembic upgrade head`.
