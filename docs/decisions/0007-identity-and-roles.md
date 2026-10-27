@@ -1,6 +1,6 @@
 # ADR-0007: Identity mapping and application roles
 
-- **Status:** proposed (confirm when S3 #9 lands)
+- **Status:** accepted (2026-10-28, S3 #9 landed with tests)
 - **Date:** 2026-10-27
 - **Requirements:** FR-01, FR-11, NFR-Security, NFR-Privacy
 

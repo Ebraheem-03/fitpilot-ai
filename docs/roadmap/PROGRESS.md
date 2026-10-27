@@ -1,7 +1,7 @@
 # Progress
 
-Current milestone: **M0 — Foundation** (scaffold done, plan agreed 2026-10-27)
-Next up: S2 (DB foundation) and S3 (API auth), then S4–S8. S0 + S1 done 2026-10-27.
+Current milestone: **M0 — Foundation** — exit met locally 2026-10-28; awaiting green CI on the stacked PRs + merge
+Next up: merge M0 PRs, apply migrations to the hosted Supabase project, then `/kickoff-milestone M1`.
 
 > Claude: read this file at the start of a session (the SessionStart hook prints the top of it).
 > Update it with `/handoff` at the end of a session. Keep it short — history lives in git.
@@ -29,26 +29,26 @@ Estimates: S ≤ ½ day · M 1–2 days · L 3+ days. Owner "main" = main sessio
 - [x] **S1 Reproducible baseline** (#7) · NFR-Portability, FR-13 · `test-engineer` · S · deps: none
   - Tests: `make verify` runs everything CI runs (it currently skips `mypy app`); CI `api` job gets a Postgres 17 service container; fresh-clone `make setup && make verify` is green; `.env.example` lists the Supabase vars.
   - Files: `Makefile`, `.github/workflows/ci.yml`, `.env.example`, `docs/runbooks/local-dev.md`
-- [ ] **S2 DB foundation + first migration** (#8) · FR-01, FR-11 (schema only) · `backend-engineer` · M · deps: S1
+- [x] **S2 DB foundation + first migration** (#8) · FR-01, FR-11 (schema only) · `backend-engineer` · M · deps: S1
   - Tests: `alembic upgrade head` then `downgrade base` round-trip on real Postgres; `alembic check` reports no model/migration drift; **RLS is enabled on every `public` table** (Supabase's Data API exposes `public` to the anon key, so default-deny is required); pytest fixture with per-test transaction rollback.
   - Files: `services/api/app/models/{base,user,profile,gym}.py`, `app/core/db.py`, `alembic/`, `tests/conftest.py`
   - Tables: `users` (keyed by Supabase `sub`, `role`, status), `member_profiles` (goals, experience, availability, equipment, preferences), `gyms`, `gym_memberships`.
-- [ ] **S3 API authentication dependency** (#9) · FR-01, NFR-Security · `backend-engineer` · M · deps: S0, S2
+- [x] **S3 API authentication dependency** (#9) · FR-01, NFR-Security · `backend-engineer` · M · deps: S0, S2
   - Tests: missing, malformed, expired, wrong-issuer/audience and bad-signature tokens → 401; a valid token provisions a `users` row just in time, only once (idempotent); the role comes from the DB, never from client-editable token claims.
   - Files: `app/core/security.py`, `app/api/deps.py`, `app/repositories/users.py`, `tests/test_auth.py`
-- [ ] **S4 Profiles API** (#10) · FR-01 · `backend-engineer`, reviewed by `security-privacy-reviewer` · M · deps: S3
+- [x] **S4 Profiles API** (#10) · FR-01 · `backend-engineer`, reviewed by `security-privacy-reviewer` · M · deps: S3
   - Tests: `POST /api/v1/profiles` creates the caller's profile (a repeat call is idempotent or returns 409, decided in the slice); `GET /api/v1/profiles/me` → 200 own / 404 none / 401 anonymous; **member B's token never returns A's profile**; a `user_id`/`role` in the body is ignored or rejected (no mass assignment); invalid enums/lengths → 422.
   - Files: `app/api/v1/profiles.py`, `app/services/profiles.py`, `app/repositories/profiles.py`, `app/schemas/profile.py`, `tests/test_profiles.py`
-- [ ] **S5 Observability baseline** (#11) · FR-13 · `backend-engineer` · S · deps: S3
+- [x] **S5 Observability baseline** (#11) · FR-13 · `backend-engineer` · S · deps: S3
   - Tests: JSON log lines carry `event`, `request_id`, `user_id` (UUID only), status and latency; a 401 produces an `auth.rejected` event; captured logs contain no token, email or profile fields.
   - Files: `app/core/logging.py`, request-id middleware in `app/main.py`, `tests/test_logging.py`
-- [ ] **S6 Web auth flows** (#12) · FR-01 · main + `test-engineer` · M · deps: S0
+- [x] **S6 Web auth flows** (#12) · FR-01 · main + `test-engineer` · M · deps: S0
   - Tests: Playwright sign-up, sign-in and sign-out; an unauthenticated visit to `/app/*` redirects to `/sign-in`; a bad password shows an accessible error. This uses the CI auth strategy chosen in S0.
   - Files: `apps/web/src/proxy.ts`, `src/lib/supabase/{server,client}.ts`, `src/app/(auth)/{sign-in,sign-up}/`, `tests/e2e/auth.spec.ts`
-- [ ] **S7 App shell, design tokens, own-profile page (exit test)** (#13) · FR-01, NFR-Accessibility · main + `test-engineer` · L · deps: S4, S6
+- [x] **S7 App shell, design tokens, own-profile page (exit test)** (#13) · FR-01, NFR-Accessibility · main + `test-engineer` · L · deps: S4, S6
   - Tests: Vitest component tests show the nav differs for member, trainer and admin (adds `@testing-library/react` + jsdom); a skip link and keyboard-only navigation work; an axe check has no serious violations; **exit e2e: sign up → minimal onboarding form → sign out → sign in → `/app/profile` shows the saved profile**.
   - Files: `src/app/globals.css` (`@theme` tokens, light/dark), `src/app/(app)/layout.tsx`, `src/features/shell/`, `src/features/onboarding/`, `src/lib/api.ts`, `tests/e2e/profile.spec.ts`
-- [ ] **S8 Close-out** (#14) · all · `code-reviewer`, `security-privacy-reviewer` · S · deps: S1–S7
+- [x] **S8 Close-out** (#14) · all · `code-reviewer`, `security-privacy-reviewer` · S · deps: S1–S7
   - Independent review; update `traceability.md` (FR-01 → 🟨, with the cross-member test linked); confirm ADR-0003/0007/0008; `/handoff`.
 
 **Out of scope for M0 (deferred):** password-recovery UI (Supabase's email flow is enough for now) → M4 · health constraints/limitations + consent capture (health-adjacent data, needs privacy review) → M4 · data export/deletion → M5 · `trainer_assignments` and trainer/admin endpoints → M5 · role management UI (roles are seeded by a script in M0) · social login/MFA · deployment (ADR-0005) → M5 · `packages/ui` extraction · all 3D/vision work (M1/M2).
@@ -76,6 +76,8 @@ Estimates: S ≤ ½ day · M 1–2 days · L 3+ days. Owner "main" = main sessio
 
 ### M5 — Gym operations + hardening (wk 11–12)
 
+**M0 evidence (2026-10-28):** `make verify` green (66 API tests incl. Postgres integration, 21 web unit), `make e2e` 13/13 vs local Supabase (EXIT test: sign up → onboard → sign out → sign in → own profile; cross-member denial; axe). Independent code + security reviews done; all should-fix items addressed on `fix/m0-review`.
+
 ## Open decisions
 
 - API host (Render vs Railway vs Fly) — decide at M5 (ADR-0005)
@@ -83,5 +85,7 @@ Estimates: S ≤ ½ day · M 1–2 days · L 3+ days. Owner "main" = main sessio
 - Avatar source/licence (self-rigged vs licensed asset) — decide at M1 start
 
 ## Session log (newest first, 1 line each)
+
+- 2026-10-28 — M0 S2–S8: DB+RLS, JWKS auth, profiles API, logging, web auth, shell/onboarding/profile; reviews fixed.
 
 - 2026-10-27 — Scaffold + Claude Code setup created.

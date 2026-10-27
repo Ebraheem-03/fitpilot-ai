@@ -28,6 +28,12 @@ const COPY: Record<
   },
 };
 
+const GENERIC_ERROR: Record<Mode, string> = {
+  "sign-in": "Email or password is incorrect.",
+  "sign-up":
+    "We couldn't create that account. Check your details, or sign in if you already have one.",
+};
+
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +56,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
         : await supabase.auth.signInWithPassword(credentials);
     if (error) {
       setPending(false);
-      setError(error.message);
+      // Generic copy: Supabase's raw messages reveal whether an account exists.
+      setError(GENERIC_ERROR[mode]);
       return;
     }
     const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));

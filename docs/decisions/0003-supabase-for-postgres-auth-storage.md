@@ -43,7 +43,7 @@ Run the **local Supabase CLI stack in CI** (`supabase/setup-cli` → `supabase s
 - it fills the real project with test users;
 - free-tier auth rate limits would make it flaky.
 
-_Not yet proven in CI; S6 (#12) must demonstrate it._
+Implemented in `scripts/e2e.sh` / `make e2e` (S6): 13 Playwright tests pass locally against the local stack. The CI run is pending the stacked PRs.
 
 ## Consequences
 
@@ -51,7 +51,19 @@ _Not yet proven in CI; S6 (#12) must demonstrate it._
 - Supabase's Data API exposes the `public` schema to the anon/publishable key, so **every table gets RLS enabled with no policies** (default-deny). S2 asserts this in a test.
 - Authorization tests must cover member↔member and trainer↔unassigned-member denial (FR-01, FR-11 acceptance criteria).
 - Don't revoke the legacy HS256 secret while any legacy JWT-based anon/service_role key is still in use. Migrate to publishable/secret keys first.
-- Open item for S6: with `cacheComponents: true`, the session-reading route logged "unstable value `Date.now()` while prerendering". Auth-dependent server components must opt out of prerendering explicitly.
+- With `cacheComponents: true`, session-reading server components call `await connection()` inside `<Suspense>`. This resolved the spike's prerender warning.
+- The web server forwards bearer tokens only to the server-only `API_BASE_URL`, and loads only `NEXT_PUBLIC_*` + `API_BASE_URL` from the root `.env` (M0 security review).
+- If the API returns 401 while Supabase still considers the session valid, the user is sent to `/session-expired`, not `/sign-in`, to avoid a proxy redirect loop.
+- Migration 0002 revokes `anon`/`authenticated` table grants on app tables (TRUNCATE isn't governed by RLS).
+- JWKS client: 5 s timeout, 60 s cooldown on unknown-`kid` refetches; JWKS outage → 503 (not 401).
+
+### Hosted project hardening (do before any public demo)
+
+The dev project uses relaxed settings so tests don't need an inbox. Before sharing the deployed demo, set:
+
+- **Authentication → Email:** confirm email ON.
+- **Authentication → Passwords:** minimum length ≥ 8, leaked-password protection ON.
+- **Authentication → Rate limits:** keep defaults.
 
 ## Sources (checked 2026-10-27)
 

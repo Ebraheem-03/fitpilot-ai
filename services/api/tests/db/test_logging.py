@@ -20,8 +20,9 @@ def events(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
 
 
 def raw_output(caplog: pytest.LogCaptureFixture) -> str:
+    """Everything server-side logged (the test client's own httpx logger is excluded)."""
     fmt = JsonFormatter()
-    return "\n".join(fmt.format(r) for r in caplog.records)
+    return "\n".join(fmt.format(r) for r in caplog.records if not r.name.startswith("httpx"))
 
 
 def test_request_event_has_diagnostic_context(
@@ -77,3 +78,14 @@ def test_unsafe_request_id_is_replaced(api: TestClient, bad: str) -> None:
     r = api.get("/health", headers={"X-Request-ID": bad})
     assert r.headers["x-request-id"] != bad
     uuid.UUID(r.headers["x-request-id"])
+
+
+def test_unmatched_paths_are_not_logged_verbatim(
+    api: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    r = api.get("/api/v1/profiles/jane.doe@example.com", headers=bearer(uuid.uuid4()))
+    assert r.status_code in (404, 405)
+    assert "jane.doe@example.com" not in raw_output(caplog)
+    req = [e for e in events(caplog) if e["event"] == "http.request"][-1]
+    assert req["route"] == "unmatched"

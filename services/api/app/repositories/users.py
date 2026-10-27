@@ -8,6 +8,10 @@ from app.models import User
 
 
 def get_or_create(db: Session, user_id: uuid.UUID) -> User:
-    """Just-in-time provisioning (ADR-0007). Safe under concurrent first requests."""
+    """Just-in-time provisioning (ADR-0007). Reads first so steady-state requests don't write;
+    the ON CONFLICT insert keeps concurrent first requests safe."""
+    user = db.get(User, user_id)
+    if user is not None:
+        return user
     db.execute(insert(User).values(id=user_id).on_conflict_do_nothing(index_elements=[User.id]))
     return db.execute(select(User).where(User.id == user_id)).scalar_one()

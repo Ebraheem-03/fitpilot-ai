@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_credentials=True,
+        allow_credentials=False,  # bearer tokens, not cookies
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["X-Request-ID"],
@@ -50,7 +50,12 @@ def create_app() -> FastAPI:
                 logger,
                 "http.request",
                 method=request.method,
-                route=route_template(request.url.path, request.path_params),
+                # Unmatched paths are attacker/bug controlled and may carry PII: never log them.
+                route=(
+                    route_template(request.url.path, request.path_params)
+                    if request.scope.get("route") is not None
+                    else "unmatched"
+                ),
                 status=status,
                 duration_ms=round((time.perf_counter() - start) * 1000, 2),
             )

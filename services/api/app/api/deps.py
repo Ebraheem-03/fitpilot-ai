@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.db import get_db
 from app.core.logging import bind_user, log_event
-from app.core.security import InvalidToken, verify_access_token
+from app.core.security import AuthUnavailable, InvalidToken, verify_access_token
 from app.models import User, UserRole, UserStatus
 from app.repositories import users
 
@@ -42,6 +42,12 @@ def get_current_user(
     except InvalidToken as e:
         log_event(logger, "auth.rejected", logging.WARNING, reason=str(e))
         raise _unauthorized() from e
+    except AuthUnavailable as e:
+        log_event(logger, "auth.unavailable", logging.ERROR, reason=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication temporarily unavailable",
+        ) from e
 
     user = users.get_or_create(db, token.sub)
     db.commit()
