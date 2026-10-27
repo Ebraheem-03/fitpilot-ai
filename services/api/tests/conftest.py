@@ -14,7 +14,7 @@ from alembic.config import Config
 from sqlalchemy import Connection, Engine, create_engine, make_url, text
 from sqlalchemy.orm import Session
 
-API_ROOT = Path(__file__).resolve().parents[2]
+API_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEST_DB = "postgresql+psycopg://fitpilot:fitpilot@localhost:5432/fitpilot_test"
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "db"}
 
