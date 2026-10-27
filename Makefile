@@ -5,7 +5,7 @@ setup:            ## install all deps (JS + Python)
 	cd services/api && uv sync
 
 db:               ## start local Postgres+pgvector
-	docker compose up -d db
+	docker compose up -d --wait db
 
 dev:              ## web on :3000
 	pnpm dev
@@ -13,7 +13,7 @@ dev:              ## web on :3000
 dev-api:          ## api on :8000
 	cd services/api && uv run uvicorn app.main:app --reload --port 8000
 
-api-test:
+api-test: db       ## needs local Postgres for integration tests (tests/db)
 	cd services/api && uv run pytest -q
 
 api-lint:
