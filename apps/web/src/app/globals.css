@@ -1,26 +1,60 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens (M0). Components use the semantic utilities (bg-surface, text-muted,
+ * bg-brand, outline-focus …), never raw palette colours, so themes change in one place.
+ * Text/background pairs meet WCAG AA (≥ 4.5:1) in both themes.
+ */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --foreground: #18181b;
+  --surface: #f4f4f5;
+  --muted: #52525b;
+  --border: #d4d4d8;
+  --brand: #047857;
+  --brand-hover: #065f46;
+  --brand-foreground: #ffffff;
+  --danger: #b91c1c;
+  --focus: #2563eb;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --surface: #18181b;
+    --muted: #a1a1aa;
+    --border: #3f3f46;
+    --brand: #34d399;
+    --brand-hover: #6ee7b7;
+    --brand-foreground: #052e16;
+    --danger: #f87171;
+    --focus: #60a5fa;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-danger: var(--danger);
+  --color-focus: var(--focus);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
