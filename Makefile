@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-api db test verify ci api-test api-lint
+.PHONY: setup dev dev-api db test verify ci e2e api-test api-lint
 
 setup:            ## install all deps (JS + Python)
 	pnpm install
@@ -27,6 +27,9 @@ verify:           ## format + lint + typecheck + unit/integration tests (JS + Py
 	pnpm verify
 	$(MAKE) api-lint api-test
 
+e2e:              ## Playwright vs local Supabase stack + local API (Docker; never hosted projects)
+	scripts/e2e.sh
+
 ci: verify        ## everything CI runs: verify + web build + e2e (needs `playwright install chromium`)
 	pnpm --filter @fitpilot/web build
-	pnpm --filter @fitpilot/web test:e2e
+	$(MAKE) e2e

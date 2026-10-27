@@ -17,6 +17,7 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
-    "prettier": "^3"
+    "prettier": "^3",
+    "supabase": "^2.122.0"
   }
 }
