@@ -10,7 +10,7 @@ test("anonymous visit to /app redirects to sign-in with a return path", async ({
 
 test("sign up lands in the app; sign out locks it again", async ({ page }) => {
   await signUp(page);
-  await expect(page.getByText("You are signed in.")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 
   await signOut(page);
   await page.goto("/app");
@@ -25,7 +25,7 @@ test("returning user signs in and is sent to the requested page", async ({ page 
   await fillAuthForm(page, creds);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByText("You are signed in.")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 });
 
 test("wrong password shows an accessible error and stays on sign-in", async ({ page }) => {
