@@ -1,7 +1,7 @@
 # Progress
 
 Current milestone: **M0 — Foundation** (scaffold done, plan agreed 2026-10-27)
-Next up: M0 spike S0 (auth token handoff), then slices 1–8 below.
+Next up: S2 (DB foundation) and S3 (API auth), then S4–S8. S0 + S1 done 2026-10-27.
 
 > Claude: read this file at the start of a session (the SessionStart hook prints the top of it).
 > Update it with `/handoff` at the end of a session. Keep it short — history lives in git.
@@ -21,11 +21,12 @@ Proven by: S7's e2e test (sign up → create profile → sign out → sign in �
 
 Estimates: S ≤ ½ day · M 1–2 days · L 3+ days. Owner "main" = main session (no frontend subagent exists); tests by `test-engineer`.
 
-- [ ] **S0 spike: auth token handoff (riskiest unknown, time-box 1 day)** (#6) · FR-01 · `backend-engineer` + main · M · deps: none
+- [x] **S0 spike: auth token handoff (riskiest unknown, time-box 1 day)** (#6) · FR-01 · `backend-engineer` + main · M · deps: none
   - Questions: does the new Supabase project sign with asymmetric keys (JWKS, ES256) or the legacy HS256 secret (`config.supabase_jwt_secret` assumes HS256)? How does Next 16 (`proxy.ts`, not `middleware.ts`) + `@supabase/ssr` keep the session cookie and pass the access token to FastAPI? Can pytest mint valid tokens offline with a local keypair? How does Playwright authenticate in CI (local Supabase CLI stack vs dedicated test project)?
+  - **Result (2026-10-27):** done on `spike/s0-auth-handoff`: real sign-up → server component → API verified via JWKS; project signs with ES256. Findings in ADR-0003 (accepted); ADR-0007 drafted.
   - Done when: throwaway branch signs in on web, calls the API with a bearer token, and the API verifies it; findings recorded and ADR-0003 → _accepted_; ADR-0007 drafted.
   - Needs from you: create the Supabase project (and authorise the `supabase` MCP); Claude can't do the OAuth step here.
-- [ ] **S1 Reproducible baseline** (#7) · NFR-Portability, FR-13 · `test-engineer` · S · deps: none
+- [x] **S1 Reproducible baseline** (#7) · NFR-Portability, FR-13 · `test-engineer` · S · deps: none
   - Tests: `make verify` runs everything CI runs (it currently skips `mypy app`); CI `api` job gets a Postgres 17 service container; fresh-clone `make setup && make verify` is green; `.env.example` lists the Supabase vars.
   - Files: `Makefile`, `.github/workflows/ci.yml`, `.env.example`, `docs/runbooks/local-dev.md`
 - [ ] **S2 DB foundation + first migration** (#8) · FR-01, FR-11 (schema only) · `backend-engineer` · M · deps: S1
