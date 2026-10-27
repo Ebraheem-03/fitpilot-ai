@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-api db test verify api-test api-lint
+.PHONY: setup dev dev-api db test verify ci api-test api-lint
 
 setup:            ## install all deps (JS + Python)
 	pnpm install
@@ -17,12 +17,16 @@ api-test:
 	cd services/api && uv run pytest -q
 
 api-lint:
-	cd services/api && uv run ruff check . && uv run ruff format --check .
+	cd services/api && uv run ruff check . && uv run ruff format --check . && uv run mypy app
 
 test:             ## all tests
 	pnpm test
 	$(MAKE) api-test
 
-verify:           ## everything CI runs
+verify:           ## format + lint + typecheck + unit/integration tests (JS + Python)
 	pnpm verify
 	$(MAKE) api-lint api-test
+
+ci: verify        ## everything CI runs: verify + web build + e2e (needs `playwright install chromium`)
+	pnpm --filter @fitpilot/web build
+	pnpm --filter @fitpilot/web test:e2e
