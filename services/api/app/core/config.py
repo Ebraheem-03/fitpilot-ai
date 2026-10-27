@@ -13,9 +13,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     supabase_jwt_secret: str | None = None
 
-    llm_provider: str = "anthropic"
-    llm_model: str = "claude-sonnet-5-5"
-    llm_monthly_budget_usd: float = 5.0
+    # ADR-0006: zero-cost default. Tests/CI use the "fake" provider; budget 0 blocks paid calls.
+    llm_provider: str = "groq"
+    llm_model: str = "openai/gpt-oss-120b"
+    llm_monthly_budget_usd: float = 0.0
+    groq_api_key: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:
