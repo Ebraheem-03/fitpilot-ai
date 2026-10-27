@@ -29,6 +29,10 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "S", "ASYNC", "RUF"]
 ignore = ["S101"] # assert is fine in tests
 
+[tool.ruff.lint.isort]
+# The local alembic/ migrations folder would otherwise make the library look first-party.
+known-third-party = ["alembic"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
