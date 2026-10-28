@@ -326,6 +326,29 @@ describe("LiveEngine (FR-04 live session, ADR-0010 §8)", () => {
     expect(h.track.stopped).toBe(true);
   });
 
+  it("tells the member to turn side-on when the analyzer reports a front view", async () => {
+    const h = harness();
+    const analyzer = {
+      step: () => ({
+        phase: "standing",
+        reps: 0,
+        repCompleted: false,
+        tracking: { reliable: false, confidence: 0.9, reason: "unsupported_view" as const },
+        features: null,
+        cues: [],
+      }),
+      reset: () => {},
+    };
+    h.deps.createAnalyzer = () => analyzer;
+    const engine = new LiveEngine(h.deps, h.video as unknown as HTMLVideoElement, REQUIRED);
+    await engine.start();
+    await h.play(1000);
+    expect(engine.getSnapshot().tracking).toMatchObject({
+      status: "unreliable",
+      issue: "unsupported_view",
+    });
+  });
+
   it("withholds counting on a device too slow to time reps (ADR-0010 §7)", async () => {
     const h = harness({ frameMs: 200 }); // 5 processed fps
     await h.engine.start();

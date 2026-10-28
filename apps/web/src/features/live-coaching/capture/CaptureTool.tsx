@@ -49,6 +49,7 @@ export function CaptureTool() {
   const [fps, setFps] = useState(30);
   const [loops, setLoops] = useState(6);
   const [blankLoop, setBlankLoop] = useState("3");
+  const [mannequinView, setMannequinView] = useState<"side" | "front">("side");
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
@@ -119,7 +120,7 @@ export function CaptureTool() {
       let kind: "recording" | "synthetic" = "recording";
       if (source === "mannequin") {
         kind = "synthetic";
-        const avatar = new AvatarSource(mannequinRef.current!);
+        const avatar = new AvatarSource(mannequinRef.current!, 640, 480, mannequinView);
         await avatar.load(`/exercises/${squat.id}/${squat.animation!.asset}`);
         const blanks = blankLoop.split(",").filter(Boolean).map(Number);
         const clipMs = avatar.clipDurationMs;
@@ -136,6 +137,7 @@ export function CaptureTool() {
             animation: squat.animation!,
             loops,
             blankLoops: blanks,
+            view: mannequinView,
           }),
         );
       } else {
@@ -210,6 +212,17 @@ export function CaptureTool() {
                 value={loops}
                 onChange={(e) => setLoops(Number(e.target.value))}
               />
+            </label>
+            <label className="flex flex-col text-sm">
+              Camera
+              <select
+                className={field}
+                value={mannequinView}
+                onChange={(e) => setMannequinView(e.target.value as "side" | "front")}
+              >
+                <option value="side">side (supported)</option>
+                <option value="front">front (unsupported)</option>
+              </select>
             </label>
             <label className="flex flex-col text-sm">
               Hidden loops (comma-separated, 0-based)

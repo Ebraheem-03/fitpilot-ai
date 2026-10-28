@@ -9,11 +9,14 @@ export interface FeedbackCue {
   priority: number;
 }
 
+/** Why a frame was withheld; maps onto the UI's tracking issues and TrackingDegradedEvent. */
+export type TrackingReason = "low_visibility" | "unsupported_view";
+
 export interface AnalysisResult<Phase extends string> {
   phase: Phase;
   reps: number;
   repCompleted: boolean;
-  tracking: { reliable: boolean; confidence: number };
+  tracking: { reliable: boolean; confidence: number; reason?: TrackingReason };
   /** null when tracking is unreliable — never guess (principle 1, 3) */
   features: Record<string, number> | null;
   cues: FeedbackCue[];

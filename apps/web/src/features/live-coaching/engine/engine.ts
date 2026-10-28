@@ -279,6 +279,7 @@ export class LiveEngine {
       confidence: analysis?.tracking.confidence ?? 0,
       outOfFrame: landmarks !== null && isOutOfFrame(frame, this.required),
       luma: this.luma,
+      unsupportedView: analysis?.tracking.reason === "unsupported_view",
     });
     this.update({
       tracking,

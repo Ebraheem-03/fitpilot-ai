@@ -44,7 +44,7 @@ Model init (after the WASM is cached) took 170–500 ms. `createImageBitmap` too
 
 **Same machine, headless Chromium (SwiftShader software GL, like CI):** worker lite GPU took 7.6 s to init, ran at 9.6 fps (infer p50 79 ms) and dropped the page to 30 rAF/s; in other runs it never returned a frame and dropped the page to 1–2 rAF/s. Worker lite CPU ran at 29–30 fps (15 ms) with the page at 60. `auto` picked CPU here. A production build (`next build && next start`) behaved the same, so the worker bundles and loads in prod.
 
-**Mid-range phone:** _pending_ (ADR-0010 consequence). Open `/dev/pose-bench` on the phone; the avatar source needs no camera.
+**Mid-range phone:** _pending_ (ADR-0010 consequence). Run `make bench-phone`, open the printed URL on the phone (same Wi-Fi), tap **Run benchmark** and paste the JSON shown under the table here. The avatar source needs no camera, so plain http on the LAN works.
 
 ## Live squat pipeline (FR-04/FR-05, M2 S7) — 2026-10-28
 
