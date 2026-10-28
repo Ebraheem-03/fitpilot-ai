@@ -131,6 +131,8 @@ test("the demonstration can be driven from the keyboard alone", async ({ page })
   await expect(button(page, "Play")).toBeFocused();
 });
 
+// notFound() runs inside <Suspense> after streaming starts, so the HTTP status is already 200;
+// assert the rendered not-found state (same as the M0 staff-page test). The API returns 404.
 test("an exercise outside the catalogue is not found", async ({ page }) => {
   await signUp(page);
   await page.goto("/app/exercises/made_up_move");

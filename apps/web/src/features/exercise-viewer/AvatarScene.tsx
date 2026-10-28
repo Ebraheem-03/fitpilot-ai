@@ -2,10 +2,10 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useSyncExternalStore } from "react";
-import { AnimationMixer, Vector3 } from "three";
+import { AnimationMixer, type SkinnedMesh, Vector3 } from "three";
 import type { ViewPreset } from "./labels";
 import type { ExerciseModel } from "./model";
-import type { PlaybackStore } from "./playback";
+import { frameloopFor, type PlaybackStore } from "./playback";
 
 const VIEW_POSITIONS: Record<ViewPreset, [number, number, number]> = {
   front: [0, 1.15, 3.4],
@@ -45,6 +45,7 @@ function Mannequin({ model, store, onReady }: Omit<AvatarSceneProps, "view" | "a
     () => () => {
       mixer.stopAllAction();
       mixer.uncacheRoot(model.scene);
+      disposeModel(model);
     },
     [mixer, model],
   );
@@ -57,6 +58,26 @@ function Mannequin({ model, store, onReady }: Omit<AvatarSceneProps, "view" | "a
   });
 
   return <primitive object={model.scene} />;
+}
+
+/** Frees GPU buffers; <primitive> content is not disposed by R3F (three re-uploads if reused). */
+function disposeModel({ scene }: ExerciseModel) {
+  scene.traverse((object) => {
+    const mesh = object as SkinnedMesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry.dispose();
+    for (const material of [mesh.material].flat()) material.dispose();
+    if (mesh.isSkinnedMesh) mesh.skeleton.dispose();
+  });
+}
+
+/** Redraws once when the canvas comes back on screen, in case the view changed meanwhile. */
+function RedrawOnShow({ active }: { active: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    if (active) invalidate();
+  }, [active, invalidate]);
+  return null;
 }
 
 function CameraRig({ view }: { view: ViewPreset }) {
@@ -87,7 +108,7 @@ function AvatarScene({ model, store, view, active, onReady }: AvatarSceneProps) 
   );
   return (
     <Canvas
-      frameloop={!active ? "never" : playing ? "always" : "demand"}
+      frameloop={frameloopFor(active, playing)}
       shadows
       dpr={[1, 2]}
       camera={{ position: VIEW_POSITIONS[view], fov: 38 }}
@@ -115,6 +136,7 @@ function AvatarScene({ model, store, view, active, onReady }: AvatarSceneProps) 
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
       <CameraRig view={view} />
+      <RedrawOnShow active={active} />
     </Canvas>
   );
 }

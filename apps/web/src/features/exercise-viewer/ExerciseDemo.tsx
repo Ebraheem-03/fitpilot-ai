@@ -13,7 +13,13 @@ import { assetUrl, ViewerError } from "./compat";
 import { announcement, FAILURE_MESSAGES, phaseLabel, VIEW_LABELS, type ViewPreset } from "./labels";
 import { LazyScene } from "./LazyScene";
 import type { ExerciseModel } from "./model";
-import { createPlaybackStore, keyToAction, phaseAt, type PlaybackState } from "./playback";
+import {
+  coarseSnapshot,
+  createPlaybackStore,
+  keyToAction,
+  phaseAt,
+  type PlaybackState,
+} from "./playback";
 import { ViewerErrorBoundary } from "./ViewerErrorBoundary";
 import { hasWebGL } from "./webgl";
 
@@ -21,6 +27,11 @@ export type DemoExercise = Pick<
   ExerciseContract,
   "id" | "name" | "animation" | "phases" | "instructions"
 >;
+
+/** How long the 3D part may stay in "loading" before we show the fallback. */
+export const LOAD_TIMEOUT_MS = 15_000;
+/** Failures where trying again can help (network, a transient render crash). */
+const RETRYABLE = new Set(["missing", "render"]);
 
 const prefersReducedMotion = () =>
   typeof window.matchMedia === "function" &&
@@ -45,8 +56,11 @@ function useOnScreen(ref: React.RefObject<HTMLElement | null>) {
  */
 export function ExerciseDemo({ exercise }: { exercise: DemoExercise }) {
   const { animation } = exercise;
-  const [store] = useState(() => createPlaybackStore(animation.duration_s));
-  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  const [{ store, snapshot }] = useState(() => {
+    const store = createPlaybackStore(animation.duration_s);
+    return { store, snapshot: coarseSnapshot(store) };
+  });
+  const state = useSyncExternalStore(store.subscribe, snapshot, snapshot);
   const [model, setModel] = useState<ExerciseModel | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewPreset>("three_quarter");
@@ -60,17 +74,31 @@ export function ExerciseDemo({ exercise }: { exercise: DemoExercise }) {
       return;
     }
     const controller = new AbortController();
+    // Never leave the user on "Loading…" forever (slow network, scene that never mounts).
+    const watchdog = setTimeout(() => {
+      if (store.getState().status !== "loading") return;
+      controller.abort();
+      store.dispatch({ type: "failed", reason: "missing" });
+    }, LOAD_TIMEOUT_MS);
     import("./model")
       .then(({ loadExerciseModel }) =>
         loadExerciseModel(assetUrl(exercise.id, animation), animation, controller.signal),
       )
-      .then(setModel, (error: unknown) => {
-        if (controller.signal.aborted) return;
-        console.warn("exercise viewer:", error instanceof Error ? error.message : error);
-        const reason = error instanceof ViewerError ? error.reason : "missing";
-        store.dispatch({ type: "failed", reason });
-      });
-    return () => controller.abort();
+      .then(
+        (loaded) => {
+          if (!controller.signal.aborted) setModel(loaded);
+        },
+        (error: unknown) => {
+          if (controller.signal.aborted) return;
+          console.warn("exercise viewer:", error instanceof Error ? error.message : error);
+          const reason = error instanceof ViewerError ? error.reason : "missing";
+          store.dispatch({ type: "failed", reason });
+        },
+      );
+    return () => {
+      clearTimeout(watchdog);
+      controller.abort();
+    };
   }, [store, exercise.id, animation, attempt]);
 
   const onReady = useCallback(
@@ -80,7 +108,7 @@ export function ExerciseDemo({ exercise }: { exercise: DemoExercise }) {
   const onSceneError = useCallback(
     (error: Error) => {
       console.warn("exercise viewer:", error.message);
-      store.dispatch({ type: "failed", reason: "webgl" });
+      store.dispatch({ type: "failed", reason: "render" });
     },
     [store],
   );
@@ -91,7 +119,7 @@ export function ExerciseDemo({ exercise }: { exercise: DemoExercise }) {
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return; // buttons and the slider handle their own keys
-    const action = keyToAction(event.key);
+    const action = keyToAction(event.key, event);
     if (!action) return;
     event.preventDefault();
     store.dispatch(action);
@@ -174,7 +202,7 @@ function ViewerFallback({
     >
       <p className="font-medium">{FAILURE_MESSAGES[state.reason]}</p>
       <p className="text-muted">Follow the written steps instead.</p>
-      {state.reason === "missing" && (
+      {RETRYABLE.has(state.reason) && (
         <button
           type="button"
           onClick={onRetry}
@@ -241,7 +269,12 @@ function ViewerControls({
       <input
         type="range"
         aria-label="Position in demonstration"
-        aria-valuetext={`${state.time.toFixed(1)} of ${state.duration.toFixed(1)} seconds, ${phaseLabel(phase)} phase`}
+        // While playing, only the phase changes the text, so screen readers aren't flooded.
+        aria-valuetext={
+          playing
+            ? `Playing, ${phaseLabel(phase)} phase`
+            : `${state.time.toFixed(1)} of ${state.duration.toFixed(1)} seconds, ${phaseLabel(phase)} phase`
+        }
         min={0}
         max={state.duration}
         step={0.05}

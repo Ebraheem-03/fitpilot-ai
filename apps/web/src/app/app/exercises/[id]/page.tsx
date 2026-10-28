@@ -11,6 +11,7 @@ export async function generateMetadata({
   params,
 }: PageProps<"/app/exercises/[id]">): Promise<Metadata> {
   await connection();
+  // getExercise is wrapped in React cache(): metadata and page share one API call per request.
   const exercise = await getExercise((await params).id);
   return { title: `${exercise?.name ?? "Exercise"} · FitPilot AI` };
 }

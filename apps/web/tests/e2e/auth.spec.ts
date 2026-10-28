@@ -65,3 +65,15 @@ test("sign-up form is keyboard operable", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/app$/);
 });
+
+test("static-looking paths under /app still go through the auth proxy", async ({ page }) => {
+  for (const path of ["/app/exercises/x.glb", "/app/x.png"]) {
+    await page.goto(path);
+    await expect(page, path).toHaveURL(/\/sign-in\?next=/);
+  }
+});
+
+test("exercise models are public static assets, served without a session", async ({ request }) => {
+  const res = await request.get("/exercises/bodyweight_squat/squat.glb", { maxRedirects: 0 });
+  expect(res.status()).toBe(200);
+});
