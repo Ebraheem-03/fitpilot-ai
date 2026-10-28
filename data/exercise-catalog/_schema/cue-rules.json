@@ -4,5 +4,12 @@
     "measurements": [
       "min_knee_angle_deg"
     ]
+  },
+  "squat.torso.forward_lean": {
+    "exercise_id": "bodyweight_squat",
+    "measurements": [
+      "trunk_lean_deg",
+      "min_knee_angle_deg"
+    ]
   }
 }

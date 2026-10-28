@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { cueRuleViolation } from "@fitpilot/exercise-contracts";
 import { describe, expect, it } from "vitest";
 import {
   aggregate,
@@ -155,6 +156,10 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
               Object.keys(rule!.measurements).sort(),
             );
             expect(explainCue(cue.message_id)).toBeDefined();
+            // and the session-event contract would accept it as a feedback_shown (ADR-0011)
+            expect(
+              cueRuleViolation(cue.rule_id, exerciseId, Object.keys(cue.measurements)),
+            ).toBeNull();
           }
         }
       },

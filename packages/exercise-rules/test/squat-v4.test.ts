@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { cueRuleViolation } from "@fitpilot/exercise-contracts";
 import { describe, expect, it } from "vitest";
 import {
   CUE_RULE_DEFINITIONS,
@@ -146,7 +147,12 @@ describe("cue rule declarations and explanations", () => {
 
   it("emitted cues use exactly the declared message, priority and measurements", () => {
     const { done } = rep(new SquatAnalyzer(), { bottom: 128, leanAtBottom: 85 });
+    expect(done!.cues).toHaveLength(2);
     for (const c of done!.cues) {
+      // accepted by the session-event contract (declared rule + measurement keys, ADR-0011)
+      expect(
+        cueRuleViolation(c.rule_id, "bodyweight_squat", Object.keys(c.measurements)),
+      ).toBeNull();
       const def = SQUAT_RULES.find((r) => r.rule_id === c.rule_id)!;
       expect(c).toMatchObject({
         message_id: def.message_id,
