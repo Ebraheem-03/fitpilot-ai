@@ -1,0 +1,6 @@
+{
+  "min_precision": 0.95,
+  "min_recall": 0.9,
+  "match_tolerance_ms": 400,
+  "min_recorded_clips": 0
+}
