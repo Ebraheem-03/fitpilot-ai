@@ -1,11 +1,47 @@
 {
   "id": "bodyweight_squat",
   "name": "Bodyweight Squat",
-  "version": 1,
+  "version": 2,
   "equipment": [],
   "target_muscles": ["quadriceps", "glutes", "adductors"],
   "camera_views": ["side"],
-  "animation_asset": "squat.glb",
+  "animation": {
+    "asset": "squat.glb",
+    "clip": "squat",
+    "duration_s": 4,
+    "phases": [
+      {
+        "phase": "standing",
+        "start_s": 0,
+        "end_s": 0.5,
+        "instruction_indices": [0]
+      },
+      {
+        "phase": "descending",
+        "start_s": 0.5,
+        "end_s": 2,
+        "instruction_indices": [1]
+      },
+      {
+        "phase": "bottom",
+        "start_s": 2,
+        "end_s": 2.4,
+        "instruction_indices": [2]
+      },
+      {
+        "phase": "ascending",
+        "start_s": 2.4,
+        "end_s": 3.6,
+        "instruction_indices": [3]
+      },
+      {
+        "phase": "standing",
+        "start_s": 3.6,
+        "end_s": 4,
+        "instruction_indices": [0]
+      }
+    ]
+  },
   "supported_capabilities": [
     "pose_tracking",
     "rep_counting",
