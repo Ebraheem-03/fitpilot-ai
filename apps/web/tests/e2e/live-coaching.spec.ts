@@ -19,10 +19,14 @@ test("EXIT: the mannequin's squats are counted, and the count pauses while nobod
   await page.getByRole("link", { name: "Track your reps with the camera" }).click();
   await expect(page).toHaveURL(/\/app\/exercises\/bodyweight_squat\/live$/);
 
-  // Nothing leaves the device: record every non-GET request from here on.
+  // Nothing leaves the device: record every request (any method, page or worker) that goes
+  // anywhere but this app's own origin, and every upload-shaped request to it.
+  const origin = new URL(page.url()).origin;
   const sent: string[] = [];
   page.on("request", (r) => {
-    if (r.method() !== "GET") sent.push(`${r.method()} ${r.url()}`);
+    if (new URL(r.url()).origin !== origin || r.method() !== "GET") {
+      sent.push(`${r.method()} ${r.url()}`);
+    }
   });
 
   await expect(page.getByText(/processed on this device only/)).toBeVisible();
@@ -62,10 +66,11 @@ test("EXIT: the mannequin's squats are counted, and the count pauses while nobod
     if (b.reps > a.reps) expect([a.status, b.status]).toContain("tracking");
   }
 
-  // NFR feedback latency: camera frame → analysed result on screen, median ≤ 250 ms.
+  // Pipeline latency (frame grab → analysed result published), median. The NFR's end-to-end
+  // figure adds up to one camera frame interval and a paint; see benchmarks.md.
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
   console.log(
-    `live pipeline: latency median ${median(latency)} ms (n=${latency.length}), fps median ${median(fps)}`,
+    `live pipeline: grab→published latency median ${median(latency)} ms (n=${latency.length}), fps median ${median(fps)}`,
   );
   expect(median(latency)).toBeLessThanOrEqual(250);
 

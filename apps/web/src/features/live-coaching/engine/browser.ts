@@ -73,6 +73,10 @@ export function browserDeps(video: HTMLVideoElement, createAnalyzer: () => Analy
       const id = requestAnimationFrame(() => callback());
       return () => cancelAnimationFrame(id);
     },
+    every: (ms, callback) => {
+      const id = setInterval(callback, ms);
+      return () => clearInterval(id);
+    },
     now: () => performance.now(),
   };
 }

@@ -34,6 +34,8 @@ export interface EngineDeps {
   /** mean luma 0–1 of a tiny downscaled frame, or null if it can't be read */
   sampleLuma(video: HTMLVideoElement): number | null;
   scheduleFrame(callback: () => void): () => void;
+  /** repeating timer independent of video frames (the stall watchdog); returns a cancel */
+  every(ms: number, callback: () => void): () => void;
   now(): number;
 }
 
@@ -45,7 +47,10 @@ export interface EngineSnapshot {
   /** latest 33-point landmarks for the overlay; null when nobody is detected */
   landmarks: Float32Array | null;
   delegate: PoseDelegate | null;
-  /** last frame: camera grab → analysis published, ms (NFR feedback latency ≤ 250 ms median) */
+  /**
+   * Pipeline latency of the last frame: frame grab → analysis published, ms. Excludes the camera's
+   * own frame interval and the paint; see benchmarks.md for the end-to-end estimate.
+   */
   latencyMs: number | null;
 }
 
@@ -54,6 +59,8 @@ export const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
 };
 const LUMA_EVERY_MS = 1000;
+/** no analysed frame for this long while running ⇒ say tracking has stalled (principle 3) */
+export const STALL_MS = 2000;
 
 /**
  * Live coaching engine (FR-04/FR-05, §8 stages 1–3): camera → pose worker → exercise analyzer,
@@ -68,11 +75,17 @@ export class LiveEngine {
   private analyzer: Analyzer;
   private readonly monitor = new TrackingMonitor();
   private cancelFrame: (() => void) | null = null;
+  private cancelWatchdog: (() => void) | null = null;
+  private lastResultAt = 0;
+  /** one frame in flight end to end (grab + detect), so frames are dropped, never queued */
+  private inFlight = false;
   private clockStart = 0;
   private lastLumaAt = -Infinity;
   private luma: number | null = null;
   /** bumps on stop/restart so results from an old camera or worker are dropped */
   private generation = 0;
+  /** bumps whenever the frame loop (re)starts or stops, so a frame from before a pause is dropped */
+  private run = 0;
 
   constructor(
     private readonly deps: EngineDeps,
@@ -102,7 +115,8 @@ export class LiveEngine {
   async start(): Promise<void> {
     const before = this.state.session;
     this.dispatch({ type: before.status === "error" ? "retry" : "start" });
-    if (this.state.session.status !== "requesting") return;
+    // only a real transition starts a camera (a second click while requesting does nothing)
+    if (this.state.session === before || this.state.session.status !== "requesting") return;
     const generation = ++this.generation;
     let stream: MediaStream;
     try {
@@ -123,6 +137,7 @@ export class LiveEngine {
     }
     this.video.srcObject = stream;
     await this.video.play().catch(() => {}); // autoplay is allowed: muted + user gesture
+    if (generation !== this.generation) return; // stopped meanwhile: don't start a worker
     this.dispatch({ type: "granted" });
     this.resetAnalysis();
     await this.loadModel(generation);
@@ -166,17 +181,24 @@ export class LiveEngine {
       source.terminate();
       this.source = null;
       this.dispatch({ type: "workerCrashed" });
+      // the analyzer keeps its state: the gap rules (maxGapMs) decide whether a rep survives
       if (this.state.session.status === "loading") void this.loadModel(generation);
       else this.releaseCamera(); // gave up: don't leave the camera on with nothing analysing
     };
+    // a source that is no longer current (stopped or replaced) must not outlive this call
+    const stale = () => {
+      if (generation === this.generation && this.source === source) return false;
+      if (this.source !== source) source.terminate();
+      return true;
+    };
     try {
       const { delegate } = await source.init();
-      if (generation !== this.generation || this.source !== source) return;
+      if (stale()) return;
       this.update({ delegate });
       this.dispatch({ type: "modelReady" });
       this.startLoop(generation);
     } catch {
-      if (generation !== this.generation || this.source !== source) return;
+      if (stale()) return;
       source.terminate();
       this.source = null;
       this.dispatch({ type: "modelFailed" });
@@ -186,22 +208,49 @@ export class LiveEngine {
 
   private startLoop(generation: number) {
     this.stopLoop();
+    const run = this.run;
     const tick = () => {
-      if (generation !== this.generation || this.state.session.status !== "running") return;
+      if (generation !== this.generation || run !== this.run) return;
+      if (this.state.session.status !== "running") return;
       this.cancelFrame = this.deps.scheduleFrame(tick);
-      void this.processFrame(generation);
+      void this.processFrame(generation, run);
     };
     this.cancelFrame = this.deps.scheduleFrame(tick);
+    this.lastResultAt = this.deps.now();
+    this.cancelWatchdog = this.deps.every(STALL_MS / 4, () => this.checkStall(run));
   }
 
   private stopLoop() {
+    this.run += 1;
     this.cancelFrame?.();
     this.cancelFrame = null;
+    this.cancelWatchdog?.();
+    this.cancelWatchdog = null;
   }
 
-  private async processFrame(generation: number) {
+  /** Frames stopped arriving (frozen camera, background tab, failing worker): don't look healthy. */
+  private checkStall(run: number) {
+    if (run !== this.run || this.state.session.status !== "running") return;
+    if (this.deps.now() - this.lastResultAt < STALL_MS) return;
+    if (this.state.tracking.issue === "no_frames") return;
+    this.update({ tracking: this.monitor.stall(), landmarks: null });
+  }
+
+  private async processFrame(generation: number, run: number) {
     const source = this.source;
-    if (!source || source.busy) return; // backpressure: drop, never queue (ADR-0010 §6)
+    if (!source || source.busy || this.inFlight) return; // drop, never queue (ADR-0010 §6)
+    this.inFlight = true;
+    try {
+      await this.analyseNextFrame(source, generation, run);
+    } catch {
+      // a bug in analysis must not become an unhandled rejection; the frame is simply not
+      // counted, and if it keeps happening the stall watchdog says so
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
+  private async analyseNextFrame(source: PoseSource, generation: number, run: number) {
     const tMs = this.deps.now() - this.clockStart;
     if (tMs - this.lastLumaAt >= LUMA_EVERY_MS) {
       this.luma = this.deps.sampleLuma(this.video);
@@ -209,13 +258,16 @@ export class LiveEngine {
     }
     const grabbedAt = this.deps.now();
     let landmarks: Float32Array | null;
+    let bitmap: ImageBitmap | null = null;
     try {
-      const bitmap = await this.deps.grabFrame(this.video);
+      bitmap = await this.deps.grabFrame(this.video);
       ({ landmarks } = await source.detect(bitmap, tMs));
     } catch {
+      bitmap?.close(); // not transferred (e.g. DataCloneError); a no-op if it was
       return; // one bad frame (or a crash, handled by crashHandler) — nothing to analyse
     }
-    if (generation !== this.generation || this.state.session.status !== "running") return;
+    if (generation !== this.generation || run !== this.run) return;
+    if (this.state.session.status !== "running") return;
 
     const frame = landmarks ? toLandmarkFrame(landmarks) : {};
     // Below the fps floor the state machine's timing is meaningless: don't advance it.
@@ -236,6 +288,7 @@ export class LiveEngine {
       phase: analysis?.phase ?? this.state.phase,
       latencyMs: Math.round(this.deps.now() - grabbedAt),
     });
+    this.lastResultAt = this.deps.now(); // only a published result counts as "alive"
   }
 
   private onTrackEnded(generation: number) {

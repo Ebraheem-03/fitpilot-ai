@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { LandmarkFixture } from "@fitpilot/exercise-contracts";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EngineDeps } from "./engine/engine";
 import { FixtureReplayPoseSource } from "./engine/testing/fixture-source";
@@ -34,6 +35,7 @@ vi.mock("./engine/browser", async () => {
         env.queued.push(cb);
         return () => (env.queued = env.queued.filter((q) => q !== cb));
       },
+      every: () => () => {},
       now: () => env.clock,
     }),
   };
@@ -92,7 +94,7 @@ describe("LiveCoach (FR-04 UI)", () => {
     await advance(4500);
     expect(screen.getByTestId("tracking-status").dataset.status).toBe("tracking");
     expect(screen.getByTestId("rep-count").textContent).toBe("1");
-    expect(screen.getByTestId("live-announcement").textContent).toBe("Tracking. 1 reps.");
+    expect(screen.getByTestId("live-announcement").textContent).toBe("Tracking. 1 rep.");
   });
 
   it("says reps are paused while nobody is visible (hidden loop) and keeps the count", async () => {
@@ -131,6 +133,26 @@ describe("LiveCoach (FR-04 UI)", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
     expect(screen.getByRole("alert").textContent).toMatch(/Camera access was blocked/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("moves focus to the next action when the panel it was on disappears", async () => {
+    render(<LiveCoach exercise={exercise} />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pause" }));
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
+    expect(document.activeElement?.textContent).toBe("Camera off.");
+  });
+
+  it("survives React StrictMode's double mount with one live camera", async () => {
+    render(
+      <StrictMode>
+        <LiveCoach exercise={exercise} />
+      </StrictMode>,
+    );
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
+    await advance(4500);
+    expect(screen.getByTestId("rep-count").textContent).toBe("1");
   });
 
   it("turns the camera off when the page is left", async () => {

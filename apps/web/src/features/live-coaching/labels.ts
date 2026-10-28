@@ -83,6 +83,13 @@ export function guidance(
         title: "Turn side-on",
         detail: "Squats are tracked from the side. Turn 90° so your side faces the camera.",
       };
+    case "no_frames":
+      return {
+        tone: "warn",
+        title: "The camera picture has stopped updating",
+        detail:
+          "Make sure this tab stays in front and the camera isn't covered or in use elsewhere. If it doesn't recover, stop and start again.",
+      };
     case "slow_device":
       return {
         tone: "warn",
@@ -117,14 +124,16 @@ export function announcement(session: SessionState, tracking: TrackingSnapshot, 
     case "loading":
       return "Camera on. Preparing tracking.";
     case "paused":
-      return `Paused. ${reps} reps counted.`;
+      return `Paused. ${count(reps)} counted.`;
     case "stopped":
-      return `Stopped. Camera off. ${reps} reps counted.`;
+      return `Stopped. Camera off. ${count(reps)} counted.`;
     case "error":
-      return FAILURE_MESSAGES[session.reason].title;
+      return ""; // the error panel is role="alert" and announces itself
     case "running":
       return tracking.status === "tracking"
-        ? `Tracking. ${reps} reps.`
+        ? `Tracking. ${count(reps)}.`
         : `Tracking not reliable. Reps paused at ${reps}.`;
   }
 }
+
+export const count = (reps: number) => `${reps} ${reps === 1 ? "rep" : "reps"}`;
