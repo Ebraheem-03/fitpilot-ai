@@ -9,7 +9,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:vision": "vitest run test/vision"
   },
   "dependencies": {
     "@fitpilot/exercise-contracts": "workspace:*"
