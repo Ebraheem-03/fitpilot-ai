@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_7426039",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "left",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "loose",
+    "notes": "Pexels 7426039: older adult, beach, bright sun; already descending at frame 0"
+  },
+  "reps": [
+    { "start_ms": 0, "bottom_ms": 1100, "end_ms": 2600, "full_depth": true },
+    { "start_ms": 3100, "bottom_ms": 4000, "end_ms": 4800, "full_depth": true },
+    { "start_ms": 5300, "bottom_ms": 6100, "end_ms": 7000, "full_depth": true },
+    { "start_ms": 7500, "bottom_ms": 8300, "end_ms": 9300, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_7691062",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "front",
+  "facing": "camera",
+  "supported": false,
+  "conditions": {
+    "lighting": "dim",
+    "clothing": "fitted",
+    "notes": "Pexels 7691062: dark backlit silhouette, front-on"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

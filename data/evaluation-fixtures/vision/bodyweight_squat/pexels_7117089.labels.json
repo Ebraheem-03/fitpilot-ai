@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_7117089",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "backlit",
+    "clothing": "fitted",
+    "notes": "Pexels 7117089: large window behind; very slow reps with ~3 s holds, long standing pause"
+  },
+  "reps": [
+    { "start_ms": 600, "bottom_ms": 2800, "end_ms": 5400, "full_depth": true },
+    { "start_ms": 9200, "bottom_ms": 12800, "end_ms": 15600, "full_depth": true },
+    { "start_ms": 21000, "bottom_ms": 25000, "end_ms": 28000, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

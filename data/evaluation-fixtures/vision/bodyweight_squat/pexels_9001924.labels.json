@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_9001924",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 9001924: feet out of frame"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_4065502",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "backlit",
+    "clothing": "loose",
+    "notes": "Pexels 4065502: same person/pier as 4065452"
+  },
+  "reps": [
+    { "start_ms": 700, "bottom_ms": 1800, "end_ms": 3000, "full_depth": true },
+    { "start_ms": 3900, "bottom_ms": 4800, "end_ms": 5900, "full_depth": true },
+    { "start_ms": 6900, "bottom_ms": 8000, "end_ms": 9200, "full_depth": true },
+    { "start_ms": 10200, "bottom_ms": 11200, "end_ms": 12400, "full_depth": true },
+    { "start_ms": 13500, "bottom_ms": 14400, "end_ms": 15500, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

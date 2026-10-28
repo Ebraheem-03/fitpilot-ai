@@ -109,14 +109,21 @@ export const ClipLabels = z
 export type ClipLabels = z.infer<typeof ClipLabels>;
 
 /** Per-exercise acceptance gate, versioned next to the fixtures (data/…/<exercise>/gate.json). */
+/**
+ * Two jobs, judged separately (M2 calibration): counting reps on supported setups, and refusing
+ * to count on unsupported ones. One mixed precision number would hide which of them failed.
+ */
 export const VisionGate = z.object({
   /**
    * Only fixtures from the model the app actually runs (ADR-0010) are held to the gate; fixtures
    * from other models are reported for comparison.
    */
   runtime_model: z.enum(["pose_landmarker_lite", "pose_landmarker_full"]),
+  /** counting, on `supported` clips only */
   min_precision: z.number().min(0).max(1),
   min_recall: z.number().min(0).max(1),
+  /** refusal: share of `supported: false` clips on which nothing at all is counted */
+  min_refusal_rate: z.number().min(0).max(1),
   /** a counted rep matches a label if it completes within [start − tol, end + tol] */
   match_tolerance_ms: Ms,
   /** recorded (non-synthetic) clips required before the gate counts as evidence */

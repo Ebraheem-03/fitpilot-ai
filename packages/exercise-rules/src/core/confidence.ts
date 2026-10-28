@@ -1,6 +1,11 @@
 import type { LandmarkName } from "@fitpilot/exercise-contracts";
 import type { Landmark } from "./geometry";
 
+/**
+ * One frame of named landmarks in **image-height units**: y is MediaPipe's normalised y, x is
+ * normalised x × (width / height). Equal units on both axes make angles and length ratios true
+ * regardless of the camera's aspect ratio (portrait phones included).
+ */
 export type LandmarkFrame = Partial<Record<LandmarkName, Landmark>>;
 
 export interface TrackingQuality {

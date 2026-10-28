@@ -14,3 +14,6 @@ supabase/.temp
 
 # vendored MediaPipe runtime (ADR-0010)
 apps/web/public/mediapipe
+
+# vision fixtures: machine-written landmark data, kept minified (labels stay formatted)
+data/evaluation-fixtures/vision/**/*.landmarks.json

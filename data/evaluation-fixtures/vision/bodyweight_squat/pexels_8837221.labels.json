@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_8837221",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 8837221: same person/room as 8837118, portrait; slow tempo"
+  },
+  "reps": [
+    { "start_ms": 500, "bottom_ms": 2000, "end_ms": 3600, "full_depth": true },
+    { "start_ms": 4800, "bottom_ms": 6600, "end_ms": 8600, "full_depth": true },
+    { "start_ms": 10200, "bottom_ms": 12000, "end_ms": 13600, "full_depth": true },
+    { "start_ms": 16300, "bottom_ms": 17400, "end_ms": 19000, "full_depth": true },
+    { "start_ms": 21200, "bottom_ms": 23000, "end_ms": 24800, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

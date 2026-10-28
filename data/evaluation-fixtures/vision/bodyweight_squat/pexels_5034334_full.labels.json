@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_5034334_full",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "left",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 5034334: plain wall; walks and bends to pick up a bottle 7.2-8.6 s (not a squat)"
+  },
+  "reps": [
+    { "start_ms": 450, "bottom_ms": 1200, "end_ms": 1900, "full_depth": true },
+    { "start_ms": 2700, "bottom_ms": 3400, "end_ms": 4300, "full_depth": true },
+    { "start_ms": 5300, "bottom_ms": 6000, "end_ms": 6600, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

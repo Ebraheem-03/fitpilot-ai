@@ -56,16 +56,28 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
   });
 
   it.runIf(make && gated.length > 0)(
-    `meets the gate on ${gate.runtime_model} and never counts in untrackable spans`,
+    `counts reps on supported clips (${gate.runtime_model}) and never in untrackable spans`,
     () => {
-      const evals = run(gated);
-      report(`${exerciseId} · ${gate.runtime_model} (gated)`, evals);
+      const evals = run(gated.filter((c) => c.labels.supported));
+      report(`${exerciseId} · ${gate.runtime_model} · supported (counting gate)`, evals);
       const summary = aggregate(evals);
       // no vacuous pass: precision/recall are 1 when nothing is labelled (replay.ts)
       expect(summary.truePositives + summary.falseNegatives).toBeGreaterThan(0);
       expect(summary.repsInUntrackable).toBe(0);
       expect(summary.precision).toBeGreaterThanOrEqual(gate.min_precision);
       expect(summary.recall).toBeGreaterThanOrEqual(gate.min_recall);
+    },
+  );
+
+  it.runIf(make && gated.length > 0)(
+    `refuses to count on unsupported setups (≥ ${gate.min_refusal_rate * 100}% of clips count nothing)`,
+    () => {
+      const evals = run(gated.filter((c) => !c.labels.supported));
+      report(`${exerciseId} · ${gate.runtime_model} · unsupported (refusal gate)`, evals);
+      expect(evals.length).toBeGreaterThan(0);
+      const refused = evals.filter((e) => e.counted === 0).length / evals.length;
+      console.log(`refusal rate ${(refused * 100).toFixed(0)}% (${evals.length} clips)`);
+      expect(refused).toBeGreaterThanOrEqual(gate.min_refusal_rate);
     },
   );
 

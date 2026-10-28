@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_5034577_full",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "front",
+  "facing": "camera",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 5034577: plain wall, front-on"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

@@ -10,7 +10,7 @@ export interface FeedbackCue {
 }
 
 /** Why a frame was withheld; maps onto the UI's tracking issues and TrackingDegradedEvent. */
-export type TrackingReason = "low_visibility" | "unsupported_view";
+export type TrackingReason = "low_visibility" | "out_of_frame" | "unsupported_view";
 
 export interface AnalysisResult<Phase extends string> {
   phase: Phase;

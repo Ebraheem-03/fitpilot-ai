@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_39171909",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "three_quarter",
+  "supported": false,
+  "conditions": {
+    "lighting": "backlit",
+    "clothing": "loose",
+    "notes": "Pexels 39171909: Smith machine at ~45 deg, rack occludes the legs, bright windows behind"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

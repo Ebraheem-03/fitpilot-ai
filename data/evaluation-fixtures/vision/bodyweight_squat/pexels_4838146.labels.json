@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_4838146",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "left",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 4838146: second person (trainer) in frame; sinks into a half-squat at ~1.4 s and holds/pulses to the end: no completed rep"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

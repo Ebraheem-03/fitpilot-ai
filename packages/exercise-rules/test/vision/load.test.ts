@@ -6,6 +6,7 @@ import { loadExerciseFixtures } from "./load";
 
 const gate = {
   runtime_model: "pose_landmarker_lite",
+  min_refusal_rate: 0.8,
   min_precision: 0.95,
   min_recall: 0.9,
   match_tolerance_ms: 300,
