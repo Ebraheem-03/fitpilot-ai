@@ -3,6 +3,7 @@ import {
   Color,
   DirectionalLight,
   HemisphereLight,
+  type Object3D,
   PerspectiveCamera,
   Scene,
   WebGLRenderer,
@@ -10,7 +11,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 /**
- * Synthetic frame source for the pose benchmark: the M1 squat mannequin rendered side-on into a
+ * Synthetic frame source (pose benchmark, capture tool, e2e camera feed): the M1 squat mannequin rendered side-on into a
  * 640×480 canvas. No real person, deterministic, works on any device without a camera.
  */
 export class AvatarSource {
@@ -19,6 +20,7 @@ export class AvatarSource {
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(38, 640 / 480, 0.1, 20);
   private mixer: AnimationMixer | null = null;
+  private model: Object3D | null = null;
   private duration = 1;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -37,6 +39,7 @@ export class AvatarSource {
   async load(url: string): Promise<void> {
     const gltf = await new GLTFLoader().loadAsync(url);
     this.scene.add(gltf.scene);
+    this.model = gltf.scene;
     const clip = gltf.animations[0];
     if (!clip) throw new Error(`${url} has no animation clip`);
     this.mixer = new AnimationMixer(gltf.scene);
@@ -44,8 +47,13 @@ export class AvatarSource {
     this.duration = clip.duration;
   }
 
-  /** Renders the pose at `tMs` (looping) and returns the canvas as the frame. */
-  render(tMs: number): HTMLCanvasElement {
+  get clipDurationMs(): number {
+    return this.duration * 1000;
+  }
+
+  /** Renders the pose at `tMs` (looping) and returns the canvas; `hidden` renders an empty room. */
+  render(tMs: number, hidden = false): HTMLCanvasElement {
+    if (this.model) this.model.visible = !hidden;
     this.mixer?.setTime((tMs / 1000) % this.duration);
     this.renderer.render(this.scene, this.camera);
     return this.canvas;

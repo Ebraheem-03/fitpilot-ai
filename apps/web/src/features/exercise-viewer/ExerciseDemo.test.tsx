@@ -158,7 +158,10 @@ describe("ExerciseDemo (FR-03)", () => {
     const views = within(screen.getByRole("group", { name: "Camera view" }));
     expect(views.getByRole("button", { name: "45°" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(views.getByRole("button", { name: "Side" }));
-    expect(views.getByRole("button", { name: "Side" }).getAttribute("aria-pressed")).toBe("true");
+    // the update can land in a later commit under CI load (flaked once in #36's run)
+    await vi.waitFor(() =>
+      expect(views.getByRole("button", { name: "Side" }).getAttribute("aria-pressed")).toBe("true"),
+    );
     expect(screen.getByTestId("scene").dataset.view).toBe("side");
   });
 });

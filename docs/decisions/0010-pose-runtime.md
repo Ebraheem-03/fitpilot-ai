@@ -13,9 +13,9 @@ What the spike found:
 1. **Turbopack emits `new Worker(new URL(…), { type: "module" })` as a classic worker.** The ES-module WASM build fails there (`importScripts` → `import.meta` SyntaxError), and on the main thread too (MediaPipe injects it as a plain `<script>`). The classic build works in both, in dev and in a production build.
 2. **The worker keeps the page smooth.** On an M1 Pro with Chrome, inference on the main thread takes 9–16 ms of every frame: the page drops from 120 to 61–110 rAF/s. In the worker the page stays at 120. Phones are slower, so this gap gets wider there.
 3. **GPU on a software rasteriser is pathological.** In headless Chromium (SwiftShader, like CI), the GPU delegate took 7.6 s to initialise, ran at ≤ 10 fps and dragged the page to 1–30 rAF/s. CPU on the same machine ran at 30 fps with the page at 60.
-4. **Cold start is real.** The first GPU inference compiled shaders for up to 7.5 s (WebKit). If that happens on the first camera frame, it looks like a hang.
+4. **Cold start is real.** The first GPU inference compiled shaders for up to 7.6 s (WebKit). If that happens on the first camera frame, it looks like a hang.
 5. **VideoFrame transport is unreliable.** One Chrome run processed 0 frames and another processed 57 fps. `createImageBitmap` costs ≤ 0.1 ms, so there is nothing to gain from VideoFrame.
-6. **Lite vs full on the M1 Pro:** both easily exceed 30 fps (worker GPU: lite 55–59, full 56–60; worker CPU: lite 45–55, full 31). Full costs about 60 % more on CPU (25 vs 16 ms).
+6. **Lite vs full on the M1 Pro:** both easily exceed 30 fps (worker GPU: lite 55–59, full 60; worker CPU: lite 55, full 31). Full costs about 60 % more on CPU (25 vs 16 ms).
 7. WebKit (Playwright 27.2) runs the same worker, GPU in the worker included. Detection was 100 %.
 
 ## Options considered

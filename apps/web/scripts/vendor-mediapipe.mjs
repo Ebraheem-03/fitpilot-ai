@@ -16,7 +16,7 @@ const require = createRequire(import.meta.url);
 const pkgDir = dirname(dirname(require.resolve("@mediapipe/tasks-vision/vision_wasm_internal.js")));
 
 const BASE = "https://storage.googleapis.com/mediapipe-models/pose_landmarker";
-export const MODELS = {
+const MODELS = {
   "pose_landmarker_lite.task": {
     url: `${BASE}/pose_landmarker_lite/float16/1/pose_landmarker_lite.task`,
     sha256: "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
@@ -46,15 +46,28 @@ function copyWasm() {
   }
 }
 
+/** Every build depends on this download (prebuild), so time out and retry transient failures. */
+async function download(url, name, attempts = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return Buffer.from(await res.arrayBuffer());
+    } catch (error) {
+      if (i >= attempts)
+        throw new Error(`${name}: ${error} from ${url} after ${attempts} attempts`);
+      await new Promise((r) => setTimeout(r, 2000 * i));
+    }
+  }
+}
+
 async function fetchModels() {
   const dest = join(out, "models");
   mkdirSync(dest, { recursive: true });
   for (const [name, { url, sha256: want }] of Object.entries(MODELS)) {
     const dst = join(dest, name);
     if (existsSync(dst) && sha256(readFileSync(dst)) === want) continue;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`${name}: HTTP ${res.status} from ${url}`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    const buf = await download(url, name);
     const got = sha256(buf);
     if (got !== want) throw new Error(`${name}: sha256 ${got} ≠ pinned ${want}`);
     writeFileSync(dst, buf);

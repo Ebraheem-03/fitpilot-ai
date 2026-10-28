@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { loadExerciseFixtures } from "./load";
 
 const gate = {
+  runtime_model: "pose_landmarker_lite",
   min_precision: 0.95,
   min_recall: 0.9,
   match_tolerance_ms: 300,
@@ -63,6 +64,11 @@ describe("loadExerciseFixtures", () => {
     expect(() =>
       loadExerciseFixtures(dir({ "gate.json": gate, "a.labels.json": labels }), "ex"),
     ).toThrow("has no landmarks file");
+  });
+
+  it("fails on a misnamed file instead of ignoring it", () => {
+    const d = dir({ "gate.json": gate, "a.landmark.json": landmarks });
+    expect(() => loadExerciseFixtures(d, "ex")).toThrow("unexpected file(s) a.landmark.json");
   });
 
   it("fails without a gate", () => {

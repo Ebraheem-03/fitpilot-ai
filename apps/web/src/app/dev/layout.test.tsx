@@ -16,6 +16,12 @@ describe("dev tools layout", () => {
     expect(() => DevLayout({ children: null } as never)).toThrow("NEXT_NOT_FOUND");
   });
 
+  it("can be enabled in a production build for on-device measurement", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_DEV_TOOLS", "1");
+    expect(() => DevLayout({ children: null } as never)).not.toThrow();
+  });
+
   it("renders in development", () => {
     vi.stubEnv("NODE_ENV", "development");
     expect(() => DevLayout({ children: null } as never)).not.toThrow();
