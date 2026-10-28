@@ -85,6 +85,9 @@ export class SquatAnalyzer {
 
     if (this.lastReliableT !== null && tMs - this.lastReliableT > this.cfg.maxGapMs) {
       this.abandonRep(); // we didn't see the middle of it: don't count it
+      // and don't smooth or take a velocity across the gap: that would invent a movement
+      this.knee = null;
+      this.prevT = null;
     }
     this.lastReliableT = tMs;
 
@@ -203,7 +206,12 @@ export class SquatAnalyzer {
     const v = this.cfg.minVisibility;
     // a side view hides the far shoulder, so both clearly visible is required evidence
     if (!ls || !rs || !lh || !rh || Math.min(ls.visibility, rs.visibility) < v) return false;
-    const torso = Math.abs((ls.y + rs.y) / 2 - (lh.y + rh.y) / 2);
+    // full shoulder–hip length, not its vertical part: a forward lean at the bottom of a squat
+    // shrinks the vertical part and would make a side view look front-on
+    const torso = Math.hypot(
+      (ls.x + rs.x) / 2 - (lh.x + rh.x) / 2,
+      (ls.y + rs.y) / 2 - (lh.y + rh.y) / 2,
+    );
     return torso > 1e-6 && Math.abs(ls.x - rs.x) / torso > this.cfg.maxShoulderToTorso;
   }
 

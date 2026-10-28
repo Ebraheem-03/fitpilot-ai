@@ -34,7 +34,7 @@ ci: verify        ## everything CI runs: verify + web build + e2e (needs `playwr
 	pnpm --filter @fitpilot/web build
 	$(MAKE) e2e
 
-bench-phone:      ## serve /dev/pose-bench on your Wi-Fi for an on-device run (ADR-0010); Ctrl-C stops it
+bench-phone:      ## serve /dev/pose-bench on your Wi-Fi for an on-device run (ADR-0010); Ctrl-C stops it. Rebuilds .next: stop `make e2e` first
 	cd apps/web && NEXT_PUBLIC_DEV_TOOLS=1 pnpm build
-	@echo "\nOn your phone (same Wi-Fi) open: http://$$(ipconfig getifaddr en0 || hostname -I | cut -d' ' -f1):3300/dev/pose-bench\n"
+	@printf '\nOn your phone (same Wi-Fi) open: http://%s:3300/dev/pose-bench\n\n' "$$(ipconfig getifaddr en0 || hostname -I | cut -d' ' -f1)"
 	cd apps/web && NEXT_PUBLIC_DEV_TOOLS=1 pnpm exec next start -H 0.0.0.0 -p 3300

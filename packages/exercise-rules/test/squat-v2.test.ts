@@ -104,6 +104,60 @@ describe("SquatAnalyzer ruleset v2", () => {
     expect(a.step(leg(175, "left"), (t += 33)).reps).toBe(1);
   });
 
+  it("doesn't mistake a deep, forward-leaning side-view squat for a front view", () => {
+    // bottom of a squat, torso leaning forward: shoulders well ahead of the hips and only a
+    // little above them; the far shoulder is (wrongly) reported visible, slightly offset
+    const frame: LandmarkFrame = {
+      ...leg(85, "left"),
+      left_shoulder: { x: 0.62, y: 0.47, visibility: 0.95 },
+      right_shoulder: { x: 0.69, y: 0.47, visibility: 0.9 },
+      left_hip: {
+        x: 0.75 - 0.25 * Math.sin((85 * Math.PI) / 180) + 0.0,
+        y: 0.62,
+        visibility: 0.95,
+      },
+      right_hip: { x: 0.5, y: 0.62, visibility: 0.5 },
+    };
+    const r = new SquatAnalyzer().step(frame, 0);
+    expect(r.tracking.reason).not.toBe("unsupported_view");
+  });
+
+  it("rejects a leg whose segments are implausibly short or long for the torso", () => {
+    const short = leg(170, "left");
+    short.left_ankle = { ...short.left_knee!, y: short.left_knee!.y + 0.05 }; // shin 0.05 vs torso 0.3
+    expect(new SquatAnalyzer().step(short, 0).tracking.reliable).toBe(false);
+    const long = leg(170, "left");
+    long.left_ankle = { ...long.left_knee!, y: long.left_knee!.y + 0.5 }; // shin 0.5 vs torso 0.3
+    expect(new SquatAnalyzer().step(long, 0).tracking.reliable).toBe(false);
+  });
+
+  it("rejects a shoulder drawn below the hip", () => {
+    const f = leg(170, "left");
+    f.left_shoulder = { ...f.left_shoulder!, y: f.left_hip!.y + 0.1 };
+    expect(new SquatAnalyzer().step(f, 0).tracking.reliable).toBe(false);
+  });
+
+  it("keeps counting when the measured side switches mid-rep", () => {
+    const a = new SquatAnalyzer();
+    let t = 0;
+    // descend on the left leg; at the bottom the left leg disappears and only the right remains
+    for (let d = 175; d >= 90; d -= 3) a.step(leg(d, "left"), (t += 33));
+    for (let d = 90; d <= 175; d += 3) a.step(leg(d, "right", { facing: "left" }), (t += 33));
+    for (let i = 0; i < 10; i++) a.step(leg(175, "right", { facing: "left" }), (t += 33));
+    expect(a.step(leg(175, "right", { facing: "left" }), (t += 33)).reps).toBe(1);
+  });
+
+  it("doesn't infer a direction of movement across a long gap", () => {
+    const a = new SquatAnalyzer();
+    let t = 0;
+    for (let i = 0; i < 20; i++) a.step(leg(175, "left"), (t += 33));
+    t += SQUAT_RULESET.maxGapMs + 500;
+    // back in view already bent: we never saw the descent, so this frame alone can't start a rep
+    const r = a.step(leg(95, "left"), (t += 33));
+    expect(r.phase).toBe("standing");
+    expect(r.features?.knee_angle_deg).toBeCloseTo(95, 0);
+  });
+
   it.each([10, 15, 30, 60])("counts the same squats at %i fps", (fps) => {
     expect(squats(new SquatAnalyzer(), (d) => leg(d, "left"), { fps }).reps).toBe(3);
   });
