@@ -15,6 +15,7 @@ def _valid() -> dict[str, Any]:
         "name": "Demo Squat",
         "version": 1,
         "equipment": [],
+        "prescription": "reps",
         "camera_views": ["side"],
         "animation": {
             "asset": "squat.glb",
@@ -28,7 +29,7 @@ def _valid() -> dict[str, Any]:
                 {"phase": "standing", "start_s": 3.6, "end_s": 4, "instruction_indices": [0]},
             ],
         },
-        "supported_capabilities": ["rep_counting"],
+        "supported_capabilities": ["demo_3d", "rep_counting"],
         "required_landmarks": ["left_hip"],
         "ruleset_version": 1,
         "phases": ["standing", "descending", "bottom", "ascending"],
@@ -90,3 +91,72 @@ def test_asset_must_be_bare_glb_file_name(asset: str) -> None:
     e["animation"]["asset"] = asset
     with pytest.raises(ValidationError):
         ExerciseContract.model_validate(e)
+
+
+def _untracked(e: dict[str, Any]) -> None:
+    for field in ("animation", "ruleset_version", "camera_views", "required_landmarks"):
+        e.pop(field)
+    e["supported_capabilities"] = []
+
+
+def test_accepts_untracked_exercise_without_demo() -> None:
+    e = _valid()
+    _untracked(e)
+    parsed = ExerciseContract.model_validate(e)
+    assert parsed.animation is None
+    assert parsed.ruleset_version is None
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda e: e.pop("animation"), "animation is required when demo_3d is supported"),
+        (
+            lambda e: e.update(supported_capabilities=["rep_counting"]),
+            "animation requires the demo_3d capability",
+        ),
+        (lambda e: e.update(camera_views=[]), "camera_views is required for a tracked exercise"),
+        (
+            lambda e: e.update(required_landmarks=[]),
+            "required_landmarks is required for a tracked exercise",
+        ),
+        (
+            lambda e: e.pop("ruleset_version"),
+            "ruleset_version is required for a tracked exercise",
+        ),
+    ],
+)
+def test_demo_and_tracking_requirements(
+    mutate: Callable[[dict[str, Any]], object], message: str
+) -> None:
+    e = _valid()
+    mutate(e)
+    with pytest.raises(ValidationError, match=message):
+        ExerciseContract.model_validate(e)
+
+
+def test_demo_only_exercise_needs_no_tracking_fields() -> None:
+    e = _valid()
+    e["supported_capabilities"] = ["demo_3d"]
+    for field in ("ruleset_version", "camera_views", "required_landmarks"):
+        e.pop(field)
+    ExerciseContract.model_validate(e)
+
+
+def test_equipment_must_be_one_the_profile_can_express() -> None:
+    e = _valid()
+    e["equipment"] = ["dumbbells", "mat"]
+    ExerciseContract.model_validate(e)
+    e["equipment"] = ["rowing_machine"]
+    with pytest.raises(ValidationError):
+        ExerciseContract.model_validate(e)
+
+
+@pytest.mark.parametrize("prescription", ["sets", None])
+def test_prescription_is_reps_or_duration(prescription: str | None) -> None:
+    e = _valid()
+    e["prescription"] = prescription
+    with pytest.raises(ValidationError):
+        ExerciseContract.model_validate(e)
+    e["prescription"] = "duration"
+    ExerciseContract.model_validate(e)

@@ -3,9 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { listLabel } from "@/features/exercise-library/labels";
-import { analyzerFor } from "@/features/live-coaching/analyzers";
-import { ExerciseDemo } from "@/features/exercise-viewer/ExerciseDemo";
+import { ExerciseGuide } from "@/features/exercise-library/ExerciseGuide";
+import { listLabel, PRESCRIPTION_LABELS } from "@/features/exercise-library/labels";
 import { getExercise } from "@/lib/api";
 
 export async function generateMetadata({
@@ -25,7 +24,16 @@ async function ExerciseDetail({ params }: Pick<PageProps<"/app/exercises/[id]">,
   const facts: [string, string][] = [
     ["Works", listLabel(exercise.target_muscles, "—")],
     ["Equipment", listLabel(exercise.equipment, "None (bodyweight)")],
-    ["Best camera angle for tracking", listLabel(exercise.camera_views, "—")],
+    ["Format", PRESCRIPTION_LABELS[exercise.prescription]],
+    // only exercises the camera can track have a recommended angle
+    ...(exercise.camera_views.length > 0
+      ? [
+          ["Best camera angle for tracking", listLabel(exercise.camera_views, "—")] as [
+            string,
+            string,
+          ],
+        ]
+      : []),
   ];
   return (
     <article className="flex flex-col gap-8">
@@ -40,15 +48,7 @@ async function ExerciseDetail({ params }: Pick<PageProps<"/app/exercises/[id]">,
           ))}
         </dl>
       </header>
-      <ExerciseDemo exercise={exercise} />
-      {analyzerFor(exercise.id) && (
-        <Link
-          href={`/app/exercises/${exercise.id}/live`}
-          className="self-start rounded-md bg-brand px-4 py-2 font-medium text-brand-foreground hover:bg-brand-hover"
-        >
-          Track your reps with the camera
-        </Link>
-      )}
+      <ExerciseGuide exercise={exercise} />
       {exercise.technique_considerations.length > 0 && (
         <section className="rounded-xl border border-border p-5">
           <h2 className="font-semibold">Technique notes</h2>

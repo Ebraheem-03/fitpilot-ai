@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { listExercises } from "@/lib/api";
-import { listLabel } from "@/features/exercise-library/labels";
+import { ExerciseCard } from "@/features/exercise-library/ExerciseCard";
 
 export const metadata: Metadata = { title: "Exercise library · FitPilot AI" };
 
@@ -14,18 +13,7 @@ async function ExerciseList() {
     <ul className="grid gap-4 sm:grid-cols-2" data-testid="exercise-list">
       {exercises.map((exercise) => (
         <li key={exercise.id}>
-          <Link
-            href={`/app/exercises/${exercise.id}`}
-            className="flex h-full flex-col gap-2 rounded-xl border border-border p-5 hover:border-brand"
-          >
-            <span className="text-lg font-semibold">{exercise.name}</span>
-            <span className="text-sm text-muted">
-              Works: {listLabel(exercise.target_muscles, "—")}
-            </span>
-            <span className="text-sm text-muted">
-              Equipment: {listLabel(exercise.equipment, "None (bodyweight)")}
-            </span>
-          </Link>
+          <ExerciseCard exercise={exercise} />
         </li>
       ))}
     </ul>
@@ -38,7 +26,8 @@ export default function ExercisesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Exercise library</h1>
         <p className="mt-1 text-muted">
-          Every exercise FitPilot coaches, with a 3D demonstration and step-by-step instructions.
+          Every exercise FitPilot coaches, with step-by-step instructions and a 3D demonstration
+          where one exists.
         </p>
       </div>
       <Suspense fallback={<p className="text-muted">Loading…</p>}>

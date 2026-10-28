@@ -1,0 +1,20 @@
+{
+  "id": "push_up",
+  "name": "Push-Up",
+  "version": 1,
+  "equipment": [],
+  "target_muscles": ["chest", "triceps", "shoulders", "core"],
+  "prescription": "reps",
+  "phases": ["top", "lowering", "bottom", "pressing"],
+  "instructions": [
+    "Start in a high plank with your hands slightly wider than your shoulders and your body in a straight line from head to heels.",
+    "Bend your elbows to lower your chest toward the floor, keeping your elbows at roughly a 45 degree angle from your body.",
+    "Lower until your chest is close to the floor, or as far as is comfortable.",
+    "Press the floor away to return to the starting position."
+  ],
+  "technique_considerations": [
+    "Keep your hips in line with your shoulders and heels rather than sagging or piking.",
+    "If this is too hard, place your hands on a sturdy raised surface or lower your knees to the floor.",
+    "Keep your neck relaxed and your gaze slightly ahead of your hands."
+  ]
+}

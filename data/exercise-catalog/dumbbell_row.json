@@ -1,0 +1,20 @@
+{
+  "id": "dumbbell_row",
+  "name": "Dumbbell Bent-Over Row",
+  "version": 1,
+  "equipment": ["dumbbells"],
+  "target_muscles": ["upper back", "lats", "biceps"],
+  "prescription": "reps",
+  "phases": ["hang", "pulling", "top", "lowering"],
+  "instructions": [
+    "Stand with your feet hip-width apart, a dumbbell in each hand, and hinge forward at the hips with a slight bend in your knees.",
+    "Let your arms hang straight down under your shoulders, keeping your back flat and your gaze toward the floor.",
+    "Pull the dumbbells toward your lower ribs, bringing your elbows back and squeezing your shoulder blades together.",
+    "Lower the weights slowly until your arms are straight again."
+  ],
+  "technique_considerations": [
+    "Keep your back flat rather than rounding it, and choose a weight that lets you do that.",
+    "Move your arms, not your torso; avoid jerking the weights up.",
+    "Keep your neck in line with your spine."
+  ]
+}

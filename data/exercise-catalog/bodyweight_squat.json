@@ -3,6 +3,7 @@
   "name": "Bodyweight Squat",
   "version": 2,
   "equipment": [],
+  "prescription": "reps",
   "target_muscles": ["quadriceps", "glutes", "adductors"],
   "camera_views": ["side"],
   "animation": {
@@ -43,6 +44,7 @@
     ]
   },
   "supported_capabilities": [
+    "demo_3d",
     "pose_tracking",
     "rep_counting",
     "phase_detection",

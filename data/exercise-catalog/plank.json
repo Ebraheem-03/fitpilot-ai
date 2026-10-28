@@ -1,0 +1,19 @@
+{
+  "id": "plank",
+  "name": "Plank",
+  "version": 1,
+  "equipment": [],
+  "target_muscles": ["core", "shoulders", "glutes"],
+  "prescription": "duration",
+  "phases": ["setup", "hold"],
+  "instructions": [
+    "Place your forearms on the floor with your elbows directly under your shoulders and your feet hip-width apart.",
+    "Lift your body so it forms a straight line from head to heels, tightening your stomach and glutes.",
+    "Hold the position while breathing steadily, then lower your knees to the floor to finish."
+  ],
+  "technique_considerations": [
+    "Keep your hips level with your shoulders instead of letting them sag or rise.",
+    "Look at the floor just ahead of your hands to keep your neck relaxed.",
+    "Stop the set when you can no longer hold a straight line, and rest on your knees."
+  ]
+}

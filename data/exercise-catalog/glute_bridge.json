@@ -1,0 +1,20 @@
+{
+  "id": "glute_bridge",
+  "name": "Glute Bridge",
+  "version": 1,
+  "equipment": [],
+  "target_muscles": ["glutes", "hamstrings", "core"],
+  "prescription": "reps",
+  "phases": ["start", "lifting", "top", "lowering"],
+  "instructions": [
+    "Lie on your back on a mat or soft surface with your knees bent and feet flat on the floor, hip-width apart.",
+    "Press through your feet to lift your hips until your body forms a straight line from shoulders to knees.",
+    "Squeeze your glutes at the top and hold for a moment.",
+    "Lower your hips slowly back to the floor."
+  ],
+  "technique_considerations": [
+    "Keep your ribs down and avoid arching your lower back at the top.",
+    "Push through your whole foot, with your heels staying on the floor.",
+    "Rest your arms by your sides with palms down for balance."
+  ]
+}

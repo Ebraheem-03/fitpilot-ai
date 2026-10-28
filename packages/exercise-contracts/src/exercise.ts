@@ -3,12 +3,33 @@ import { LANDMARK_NAMES } from "./landmarks";
 
 export const CameraView = z.enum(["side", "front", "front_45"]);
 
-export const Capability = z.enum([
+/** Mirrors the API's `Equipment` (services/api/app/schemas/profile.py); a parity test guards it. */
+export const EQUIPMENT = [
+  "dumbbells",
+  "kettlebell",
+  "resistance_band",
+  "pull_up_bar",
+  "bench",
+  "barbell",
+  "mat",
+] as const;
+export const Equipment = z.enum(EQUIPMENT);
+
+/** Capabilities that need the camera analysis (vision) pipeline. */
+export const TRACKED_CAPABILITIES = [
   "pose_tracking",
   "rep_counting",
   "phase_detection",
   "rule_based_feedback",
-]);
+] as const;
+
+/** `demo_3d` = the exercise has a 3D demonstration (`animation`). */
+export const Capability = z.enum([...TRACKED_CAPABILITIES, "demo_3d"]);
+
+/** How the exercise is prescribed and logged: counted repetitions or a timed hold. */
+export const Prescription = z.enum(["reps", "duration"]);
+
+const isTrackedCapability = (c: string) => (TRACKED_CAPABILITIES as readonly string[]).includes(c);
 
 /** One span of the demonstration clip; spans tile the clip with no gaps or overlaps (FR-03). */
 export const AnimationPhase = z.object({
@@ -36,21 +57,40 @@ export const ExerciseContract = z
     id: z.string().regex(/^[a-z0-9_]+$/),
     name: z.string().min(1),
     version: z.number().int().positive(),
-    equipment: z.array(z.string()),
+    equipment: z.array(Equipment),
     target_muscles: z.array(z.string()).default([]),
-    camera_views: z.array(CameraView).min(1),
-    animation: ExerciseAnimation,
-    supported_capabilities: z.array(Capability).min(1),
-    required_landmarks: z.array(z.enum(LANDMARK_NAMES)).min(1),
-    ruleset_version: z.number().int().positive(),
+    prescription: Prescription,
+    /** required iff the exercise has a tracked capability */
+    camera_views: z.array(CameraView).default([]),
+    /** required iff `supported_capabilities` includes `demo_3d` (and only then) */
+    animation: ExerciseAnimation.nullable().default(null),
+    supported_capabilities: z.array(Capability).default([]),
+    /** required iff the exercise has a tracked capability */
+    required_landmarks: z.array(z.enum(LANDMARK_NAMES)).default([]),
+    /** required iff the exercise has a tracked capability */
+    ruleset_version: z.number().int().positive().nullable().default(null),
     phases: z.array(z.string()).min(2),
     instructions: z.array(z.string()).min(1),
     technique_considerations: z.array(z.string()).default([]),
   })
   .superRefine((exercise, ctx) => {
-    const { animation, phases, instructions } = exercise;
+    const { animation, phases, instructions, supported_capabilities: capabilities } = exercise;
     const fail = (message: string, path: (string | number)[]) =>
       ctx.addIssue({ code: "custom", message, path });
+
+    const demo = capabilities.includes("demo_3d");
+    if (demo && !animation) fail("animation is required when demo_3d is supported", ["animation"]);
+    if (!demo && animation) fail("animation requires the demo_3d capability", ["animation"]);
+
+    if (capabilities.some(isTrackedCapability)) {
+      const why = "is required for a tracked exercise";
+      if (exercise.camera_views.length === 0) fail(`camera_views ${why}`, ["camera_views"]);
+      if (exercise.required_landmarks.length === 0) {
+        fail(`required_landmarks ${why}`, ["required_landmarks"]);
+      }
+      if (exercise.ruleset_version === null) fail(`ruleset_version ${why}`, ["ruleset_version"]);
+    }
+    if (!animation) return;
     const timeline = animation.phases;
     const near = (a: number, b: number) => Math.abs(a - b) <= TIME_EPSILON;
 
@@ -104,3 +144,16 @@ export type ExerciseAnimation = z.infer<typeof ExerciseAnimation>;
 export type AnimationPhase = z.infer<typeof AnimationPhase>;
 export type ExerciseContract = z.infer<typeof ExerciseContract>;
 export type CameraView = z.infer<typeof CameraView>;
+export type Equipment = z.infer<typeof Equipment>;
+export type Capability = z.infer<typeof Capability>;
+export type Prescription = z.infer<typeof Prescription>;
+
+/** An exercise with a 3D demonstration (`demo_3d`): `animation` is guaranteed present. */
+export type ExerciseWithDemo = ExerciseContract & { animation: ExerciseAnimation };
+
+export const hasDemo = (exercise: ExerciseContract): exercise is ExerciseWithDemo =>
+  exercise.animation !== null;
+
+/** True when the exercise runs the camera analysis pipeline. */
+export const isTracked = (exercise: Pick<ExerciseContract, "supported_capabilities">): boolean =>
+  exercise.supported_capabilities.some(isTrackedCapability);

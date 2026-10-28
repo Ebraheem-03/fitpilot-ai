@@ -1,5 +1,5 @@
 "use client";
-import type { ExerciseContract } from "@fitpilot/exercise-contracts";
+import type { ExerciseAnimation, ExerciseContract } from "@fitpilot/exercise-contracts";
 import {
   type KeyboardEvent,
   useCallback,
@@ -23,10 +23,10 @@ import {
 import { ViewerErrorBoundary } from "./ViewerErrorBoundary";
 import { hasWebGL } from "./webgl";
 
-export type DemoExercise = Pick<
-  ExerciseContract,
-  "id" | "name" | "animation" | "phases" | "instructions"
->;
+/** An exercise that has a 3D demonstration (callers check `animation` before rendering this). */
+export type DemoExercise = Pick<ExerciseContract, "id" | "name" | "phases" | "instructions"> & {
+  animation: ExerciseAnimation;
+};
 
 /** How long the 3D part may stay in "loading" before we show the fallback. */
 export const LOAD_TIMEOUT_MS = 15_000;
