@@ -1,3 +1,4 @@
+import { cueRuleViolation } from "@fitpilot/exercise-contracts";
 import { describe, expect, it } from "vitest";
 import { type LandmarkFrame, SquatAnalyzer } from "../src";
 
@@ -53,6 +54,16 @@ describe("SquatAnalyzer", () => {
     expect(done).toBeDefined();
     expect(done.cues[0]?.rule_id).toBe("squat.depth.shallow");
     expect(done.cues[0]?.measurements.min_knee_angle_deg).toBeGreaterThan(120);
+  });
+
+  it("only emits cues the session-event contract accepts (declared rule + measurement keys)", () => {
+    const cues = runReps(new SquatAnalyzer(), 130, 1).flatMap((r) => r.cues);
+    expect(cues.length).toBeGreaterThan(0);
+    for (const cue of cues) {
+      expect(
+        cueRuleViolation(cue.rule_id, "bodyweight_squat", Object.keys(cue.measurements)),
+      ).toBeNull();
+    }
   });
 
   it("withholds analysis and cues when landmarks are not visible", () => {

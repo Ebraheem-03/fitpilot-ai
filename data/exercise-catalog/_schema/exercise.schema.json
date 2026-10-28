@@ -18,7 +18,16 @@
     "equipment": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "enum": [
+          "dumbbells",
+          "kettlebell",
+          "resistance_band",
+          "pull_up_bar",
+          "bench",
+          "barbell",
+          "mat"
+        ]
       }
     },
     "target_muscles": {
@@ -28,74 +37,109 @@
         "type": "string"
       }
     },
+    "prescription": {
+      "type": "string",
+      "enum": [
+        "reps",
+        "duration"
+      ]
+    },
     "camera_views": {
-      "minItems": 1,
+      "default": [],
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["side", "front", "front_45"]
+        "enum": [
+          "side",
+          "front",
+          "front_45"
+        ]
       }
     },
     "animation": {
-      "type": "object",
-      "properties": {
-        "asset": {
-          "type": "string",
-          "pattern": "^[a-z0-9_-]+\\.glb$"
-        },
-        "clip": {
-          "type": "string",
-          "minLength": 1
-        },
-        "duration_s": {
-          "type": "number",
-          "exclusiveMinimum": 0
-        },
-        "phases": {
-          "minItems": 1,
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "phase": {
-                "type": "string",
-                "minLength": 1
-              },
-              "start_s": {
-                "type": "number",
-                "minimum": 0
-              },
-              "end_s": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "instruction_indices": {
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 9007199254740991
-                }
-              }
+      "default": null,
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "asset": {
+              "type": "string",
+              "pattern": "^[a-z0-9_-]+\\.glb$"
             },
-            "required": ["phase", "start_s", "end_s", "instruction_indices"],
-            "additionalProperties": false
-          }
+            "clip": {
+              "type": "string",
+              "minLength": 1
+            },
+            "duration_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "phases": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "start_s": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "end_s": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "instruction_indices": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  }
+                },
+                "required": [
+                  "phase",
+                  "start_s",
+                  "end_s",
+                  "instruction_indices"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "asset",
+            "clip",
+            "duration_s",
+            "phases"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
         }
-      },
-      "required": ["asset", "clip", "duration_s", "phases"],
-      "additionalProperties": false
+      ]
     },
     "supported_capabilities": {
-      "minItems": 1,
+      "default": [],
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["pose_tracking", "rep_counting", "phase_detection", "rule_based_feedback"]
+        "enum": [
+          "pose_tracking",
+          "rep_counting",
+          "phase_detection",
+          "rule_based_feedback",
+          "demo_3d"
+        ]
       }
     },
     "required_landmarks": {
-      "minItems": 1,
+      "default": [],
       "type": "array",
       "items": {
         "type": "string",
@@ -121,9 +165,17 @@
       }
     },
     "ruleset_version": {
-      "type": "integer",
-      "exclusiveMinimum": 0,
-      "maximum": 9007199254740991
+      "default": null,
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "phases": {
       "minItems": 2,
@@ -153,6 +205,7 @@
     "version",
     "equipment",
     "target_muscles",
+    "prescription",
     "camera_views",
     "animation",
     "supported_capabilities",

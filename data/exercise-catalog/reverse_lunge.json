@@ -1,0 +1,20 @@
+{
+  "id": "reverse_lunge",
+  "name": "Reverse Lunge",
+  "version": 1,
+  "equipment": [],
+  "target_muscles": ["quadriceps", "glutes", "hamstrings"],
+  "prescription": "reps",
+  "phases": ["standing", "stepping_back", "bottom", "returning"],
+  "instructions": [
+    "Stand tall with your feet hip-width apart and your hands on your hips or by your sides.",
+    "Step one foot back and lower until both knees are bent to about 90 degrees, or as far as is comfortable.",
+    "Keep your chest upright and your front foot flat on the floor.",
+    "Push through your front foot to bring your back foot forward and stand tall, then repeat on the other side."
+  ],
+  "technique_considerations": [
+    "Take a step long enough that your front knee stays roughly above your ankle.",
+    "Keep your hips square to the front.",
+    "Hold a wall or sturdy chair for balance if you need it."
+  ]
+}

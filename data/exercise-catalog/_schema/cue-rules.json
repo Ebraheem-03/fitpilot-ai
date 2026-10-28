@@ -1,0 +1,8 @@
+{
+  "squat.depth.shallow": {
+    "exercise_id": "bodyweight_squat",
+    "measurements": [
+      "min_knee_angle_deg"
+    ]
+  }
+}

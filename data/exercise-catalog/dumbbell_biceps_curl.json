@@ -1,0 +1,20 @@
+{
+  "id": "dumbbell_biceps_curl",
+  "name": "Dumbbell Biceps Curl",
+  "version": 1,
+  "equipment": ["dumbbells"],
+  "target_muscles": ["biceps", "forearms"],
+  "prescription": "reps",
+  "phases": ["start", "curling", "top", "lowering"],
+  "instructions": [
+    "Stand tall with a dumbbell in each hand, arms by your sides and palms facing forward.",
+    "Keeping your upper arms close to your body, bend your elbows to bring the weights up toward your shoulders.",
+    "Pause briefly at the top without letting your shoulders shrug up.",
+    "Lower the weights slowly until your arms are straight again."
+  ],
+  "technique_considerations": [
+    "Choose a weight you can lift without swinging your body.",
+    "Keep your elbows near your sides rather than drifting forward.",
+    "Breathe out as you lift and in as you lower."
+  ]
+}

@@ -1,4 +1,4 @@
-import type { ExerciseContract } from "@fitpilot/exercise-contracts";
+import type { ExerciseWithDemo } from "@fitpilot/exercise-contracts";
 import { validateBytes } from "gltf-validator";
 import { AnimationMixer, type SkinnedMesh, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -25,7 +25,7 @@ export interface AssetReport {
 }
 
 export async function checkAsset(
-  exercise: ExerciseContract,
+  exercise: ExerciseWithDemo,
   bytes: Uint8Array | null,
 ): Promise<AssetReport> {
   const { asset, clip: clipName, duration_s } = exercise.animation;
