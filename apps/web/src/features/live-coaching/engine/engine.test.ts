@@ -157,6 +157,33 @@ describe("LiveEngine (FR-04 live session, ADR-0010 §8)", () => {
     expect(h.snap().session.status).toBe("stopped");
   });
 
+  it("starts no worker if stopped while the preview is starting", async () => {
+    const h = harness();
+    let resolvePlay!: () => void;
+    h.video.play = vi.fn(() => new Promise<void>((r) => (resolvePlay = r)));
+    const starting = h.engine.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    h.engine.dispose();
+    resolvePlay();
+    await starting;
+    expect(h.sources).toHaveLength(0);
+  });
+
+  it("terminates a worker whose model finishes loading after stop", async () => {
+    let finishInit!: () => void;
+    const slow = new FixtureReplayPoseSource(mannequin);
+    slow.init = () => new Promise((r) => (finishInit = () => r({ delegate: "CPU" })));
+    const h = harness({ source: () => slow });
+    const starting = h.engine.start();
+    await new Promise((r) => setTimeout(r, 0));
+    h.engine.stop();
+    finishInit();
+    await starting;
+    expect(slow.closed).toBe(true);
+    expect(h.snap().session.status).toBe("stopped");
+  });
+
   it("reports a camera that disappears mid-session", async () => {
     const h = harness();
     await h.engine.start();

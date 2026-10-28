@@ -19,10 +19,14 @@ test("EXIT: the mannequin's squats are counted, and the count pauses while nobod
   await page.getByRole("link", { name: "Track your reps with the camera" }).click();
   await expect(page).toHaveURL(/\/app\/exercises\/bodyweight_squat\/live$/);
 
-  // Nothing leaves the device: record every non-GET request from here on.
+  // Nothing leaves the device: record every request (any method, page or worker) that goes
+  // anywhere but this app's own origin, and every upload-shaped request to it.
+  const origin = new URL(page.url()).origin;
   const sent: string[] = [];
   page.on("request", (r) => {
-    if (r.method() !== "GET") sent.push(`${r.method()} ${r.url()}`);
+    if (new URL(r.url()).origin !== origin || r.method() !== "GET") {
+      sent.push(`${r.method()} ${r.url()}`);
+    }
   });
 
   await expect(page.getByText(/processed on this device only/)).toBeVisible();

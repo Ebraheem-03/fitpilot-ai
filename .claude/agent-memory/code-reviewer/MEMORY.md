@@ -1,0 +1,1 @@
+- [Async lifecycle gaps](recurring-async-lifecycle-gaps.md) — generation checks after every await, watchdogs, bitmap close, focus on unmount

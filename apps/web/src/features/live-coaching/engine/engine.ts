@@ -123,6 +123,7 @@ export class LiveEngine {
     }
     this.video.srcObject = stream;
     await this.video.play().catch(() => {}); // autoplay is allowed: muted + user gesture
+    if (generation !== this.generation) return; // stopped meanwhile: don't start a worker
     this.dispatch({ type: "granted" });
     this.resetAnalysis();
     await this.loadModel(generation);
@@ -169,14 +170,20 @@ export class LiveEngine {
       if (this.state.session.status === "loading") void this.loadModel(generation);
       else this.releaseCamera(); // gave up: don't leave the camera on with nothing analysing
     };
+    // a source that is no longer current (stopped or replaced) must not outlive this call
+    const stale = () => {
+      if (generation === this.generation && this.source === source) return false;
+      if (this.source !== source) source.terminate();
+      return true;
+    };
     try {
       const { delegate } = await source.init();
-      if (generation !== this.generation || this.source !== source) return;
+      if (stale()) return;
       this.update({ delegate });
       this.dispatch({ type: "modelReady" });
       this.startLoop(generation);
     } catch {
-      if (generation !== this.generation || this.source !== source) return;
+      if (stale()) return;
       source.terminate();
       this.source = null;
       this.dispatch({ type: "modelFailed" });
