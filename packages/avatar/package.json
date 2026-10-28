@@ -1,0 +1,29 @@
+{
+  "name": "@fitpilot/avatar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generated CC0 training mannequin + exercise clips (FR-03). Deterministic: the GLBs in apps/web/public/exercises are build outputs of this package.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "assets:build": "tsx src/cli/build.ts",
+    "assets:check": "tsx src/cli/check.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fitpilot/exercise-contracts": "workspace:*",
+    "@gltf-transform/core": "^4",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/three": "^0.186.0",
+    "gltf-validator": "2.0.0-dev.3.10",
+    "typescript": "^5",
+    "vitest": "^4",
+    "tsx": "^4"
+  }
+}

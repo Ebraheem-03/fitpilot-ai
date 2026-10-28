@@ -8,7 +8,7 @@ AI personal-training platform: 3D exercise demos (R3F) + in-browser pose analysi
 
 - Spec (source of truth, FR-01…FR-13): `docs/requirements/fitpilot-blueprint-v1.md` — read the relevant FR section before implementing anything. Traceability: `docs/requirements/traceability.md`.
 - Architecture + boundaries: `docs/architecture/overview.md`. Decisions: `docs/decisions/` (ADR-NNNN).
-- `apps/web` Next.js 16 · `services/api` FastAPI · `packages/exercise-contracts` zod contracts · `packages/exercise-rules` vision analysis (pure TS) · `data/exercise-catalog` approved exercises · `data/evaluation-fixtures` vision + AI eval data. Sub-folders have their own CLAUDE.md.
+- `apps/web` Next.js 16 · `services/api` FastAPI · `packages/exercise-contracts` zod contracts · `packages/exercise-rules` vision analysis (pure TS) · `packages/avatar` generated 3D mannequin + clips (ADR-0009) · `data/exercise-catalog` approved exercises · `data/evaluation-fixtures` vision + AI eval data. Sub-folders have their own CLAUDE.md.
 
 ## Commands
 
