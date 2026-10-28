@@ -1,9 +1,12 @@
 /// <reference lib="webworker" />
+import { confineFetch } from "./confine-fetch";
 import { PoseRunner } from "./pose-runner";
 import type { FromWorker, ToWorker } from "./protocol";
 
 declare const self: DedicatedWorkerGlobalScope;
 
+// before anything can create a MediaPipe task: no request may leave this origin
+confineFetch(self);
 const runner = new PoseRunner();
 const post = (message: FromWorker, transfer: Transferable[] = []) =>
   self.postMessage(message, transfer);

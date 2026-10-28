@@ -38,6 +38,8 @@ What the spike found:
 7. **Degradation (implemented in S5):** processed fps is measured over a rolling 2 s window. Below 15 fps, show a "device is slow, tracking may be less reliable" notice. Below 8 fps, treat tracking as unreliable and withhold counting/analysis (principle 3).
 8. **Testing:** no test hooks in product code. Vitest drives the engine with a `FixtureReplayPoseSource` (recorded landmark JSON). Playwright e2e runs the **real model in the real worker** on a synthetic camera feed: Chrome's `--use-file-for-fake-video-capture` plays a video of the generated mannequin squatting, made at test time. It contains no real person, and its ground-truth rep count is known. Blank segments in the same feed exercise tracking loss.
 
+9. **No third-party requests from the worker** (added in M2 S7). MediaPipe Tasks posts usage metrics (`POST https://odml.pa.googleapis.com/v1/log`, protobuf with an embedded API key) from inside the worker, and there is no option to turn this off. Its README asks apps to get users' consent for it. Our camera page promises that nothing leaves the device, so `pose.worker.ts` calls `confineFetch(self)` before any task is created, and every cross-origin request from the worker is rejected. The logger fails closed and stops its timer. The live-coaching EXIT e2e records every non-GET request during a session and requires none. The dev-only main-thread benchmark mode is not guarded.
+
 ## Consequences
 
 - **Phone measurement is still open.** Before S5 merges, run `/dev/pose-bench` on a mid-range phone (the avatar source needs no camera, so `http://<LAN-IP>` works) and record it. If the phone's lite worker config is under 15 fps, add the cheaper levers before S6: downscale to 256 px input and infer every other frame.

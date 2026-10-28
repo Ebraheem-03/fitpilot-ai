@@ -34,6 +34,9 @@ export async function extractLandmarks(
 }
 
 export function videoFileSource(video: HTMLVideoElement): StepSource {
+  if (video.readyState < 1 || !Number.isFinite(video.duration)) {
+    throw new Error("the video's length isn't known yet — wait for it to load, then extract");
+  }
   return {
     width: video.videoWidth,
     height: video.videoHeight,
@@ -45,9 +48,15 @@ export function videoFileSource(video: HTMLVideoElement): StepSource {
           resolve(video);
         };
         const fail = () => reject(new Error("video seek failed"));
+        const target = tMs / 1000;
+        // assigning the current position again doesn't fire "seeked" everywhere
+        if (Math.abs(video.currentTime - target) < 1e-6 && video.readyState >= 2) {
+          resolve(video);
+          return;
+        }
         video.addEventListener("seeked", done, { once: true });
         video.addEventListener("error", fail, { once: true });
-        video.currentTime = tMs / 1000;
+        video.currentTime = target;
       }),
   };
 }

@@ -19,6 +19,27 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@fitpilot/exercise-contracts", "@fitpilot/exercise-rules"],
   cacheComponents: true,
   partialPrefetching: true,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // Only this origin may use the camera (live coaching, FR-04); nothing may use the mic or
+          // location. Embedding is refused so the camera page can't be framed (clickjacking).
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+          {
+            key: "Content-Security-Policy",
+            // Narrow on purpose: workers only from this origin (ADR-0010 §2, self-hosted runtime).
+            // A full script-src policy with nonces is M5 hardening.
+            value:
+              "worker-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+          },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

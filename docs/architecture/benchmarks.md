@@ -45,3 +45,14 @@ Model init (after the WASM is cached) took 170–500 ms. `createImageBitmap` too
 **Same machine, headless Chromium (SwiftShader software GL, like CI):** worker lite GPU took 7.6 s to init, ran at 9.6 fps (infer p50 79 ms) and dropped the page to 30 rAF/s; in other runs it never returned a frame and dropped the page to 1–2 rAF/s. Worker lite CPU ran at 29–30 fps (15 ms) with the page at 60. `auto` picked CPU here. A production build (`next build && next start`) behaved the same, so the worker bundles and loads in prod.
 
 **Mid-range phone:** _pending_ (ADR-0010 consequence). Open `/dev/pose-bench` on the phone; the avatar source needs no camera.
+
+## Live squat pipeline (FR-04/FR-05, M2 S7) — 2026-10-28
+
+| What                                                 | Value                  | How                                                                                                                                                                                        |
+| ---------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Camera frame → analysed result published (median)    | **17 ms** (n = 127)    | `live-coaching.spec.ts` EXIT samples `data-latency-ms` (engine: `grabFrame` → snapshot update, includes inference). Headless Chromium, SwiftShader ⇒ `auto` = CPU, lite model, `next dev`. |
+| Processed fps                                        | 15 (= the feed's rate) | same run; `requestVideoFrameCallback` processes each new camera frame once                                                                                                                 |
+| Reps counted vs ground truth                         | 5 / 5, 0 while hidden  | same run; 3 repeated runs green                                                                                                                                                            |
+| Requests leaving the page during a session (non-GET) | 0                      | same run. Before the worker's fetch guard, MediaPipe posted usage metrics to `odml.pa.googleapis.com` (ADR-0010 §9)                                                                        |
+
+NFR target "median ≤ 250 ms from processed movement data to a displayed rule-based cue": met with a wide margin on CI-like hardware. Cue display itself is M3 (FR-06). This measures the rep-count path.
