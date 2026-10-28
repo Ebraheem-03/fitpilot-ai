@@ -48,6 +48,23 @@ describe("PoseWorkerClient", () => {
     await expect(init).rejects.toThrow("model 404");
   });
 
+  it("rejects init and stops the worker when it crashes before ready", async () => {
+    const client = new PoseWorkerClient();
+    const init = client.init(options);
+    FakeWorker.last.onerror?.({ message: "wasm failed to load" } as ErrorEvent);
+    await expect(init).rejects.toThrow("wasm failed to load");
+    expect(FakeWorker.last.terminated).toBe(true);
+  });
+
+  it("is not left busy when posting a frame throws", async () => {
+    const { client, worker } = await ready();
+    worker.postMessage = () => {
+      throw new DOMException("detached", "DataCloneError");
+    };
+    await expect(client.detect(frame(), 1)).rejects.toThrow("detached");
+    expect(client.busy).toBe(false);
+  });
+
   it("transfers the frame and is busy until its result arrives", async () => {
     const { client, worker } = await ready();
     const f = frame();

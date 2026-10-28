@@ -22,7 +22,8 @@ export class PoseRunner {
 
   /**
    * Loads the model and runs one warm-up inference, so "ready" means the first real frame won't
-   * stall on shader/WASM compilation (S0: up to 7.5 s cold on WebKit + GPU).
+   * stall on shader/WASM compilation (S0: up to 7.6 s cold on WebKit + GPU). A GPU delegate that
+   * fails to create *or* to run its first inference falls back to CPU.
    */
   async init(options: PoseRunnerOptions): Promise<PoseDelegate> {
     // Classic loader: Turbopack emits the worker as a classic script (importScripts works), and on
@@ -40,16 +41,19 @@ export class PoseRunner {
           ? { canvas: new OffscreenCanvas(1, 1) }
           : {}),
       });
+    const start = async (delegate: PoseDelegate) => {
+      this.landmarker = await create(delegate);
+      this.delegate = delegate;
+      if (typeof OffscreenCanvas !== "undefined") this.detect(new OffscreenCanvas(256, 256), 0);
+    };
     try {
-      this.landmarker = await create(wanted);
-      this.delegate = wanted;
+      await start(wanted);
     } catch (error) {
       if (wanted === "CPU") throw error;
       // No usable WebGL2 in this context: CPU still works, just slower (ADR-0010).
-      this.landmarker = await create("CPU");
-      this.delegate = "CPU";
+      this.close();
+      await start("CPU");
     }
-    if (typeof OffscreenCanvas !== "undefined") this.detect(new OffscreenCanvas(256, 256), 0);
     return this.delegate;
   }
 

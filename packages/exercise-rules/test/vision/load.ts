@@ -30,6 +30,14 @@ export function loadExerciseFixtures(dir: string, exerciseId: string): ExerciseF
   const gate = parse(VisionGate, join(dir, "gate.json"));
   const ids = (suffix: string) =>
     files.filter((f) => f.endsWith(suffix)).map((f) => f.slice(0, -suffix.length));
+  const stray = files.filter(
+    (f) =>
+      f.endsWith(".json") &&
+      f !== "gate.json" &&
+      !f.endsWith(".landmarks.json") &&
+      !f.endsWith(".labels.json"),
+  );
+  if (stray.length) throw new Error(`${dir}: unexpected file(s) ${stray.join(", ")}`);
   const landmarkIds = ids(".landmarks.json");
   const labelIds = new Set(ids(".labels.json"));
   for (const id of labelIds) {

@@ -21,6 +21,7 @@ export class PoseWorkerClient {
   private pending = new Map<number, (r: PoseResult | Error) => void>();
   private nextId = 0;
   private onCrash: ((error: Error) => void) | null = null;
+  private rejectInit: ((error: Error) => void) | null = null;
 
   constructor() {
     this.worker = new Worker(new URL("./pose.worker.ts", import.meta.url), { type: "module" });
@@ -38,11 +39,18 @@ export class PoseWorkerClient {
 
   init(options: PoseRunnerOptions): Promise<{ delegate: PoseDelegate; initMs: number }> {
     return new Promise((resolve, reject) => {
+      // a crash before "ready" (script/WASM load error) must reject, not hang
+      this.rejectInit = (error) => {
+        this.rejectInit = null;
+        this.worker.terminate();
+        reject(error);
+      };
       this.worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
         if (data.type === "ready") {
+          this.rejectInit = null;
           this.worker.onmessage = (e: MessageEvent<FromWorker>) => this.handle(e.data);
           resolve({ delegate: data.delegate, initMs: data.initMs });
-        } else if (data.type === "error") reject(new Error(data.message));
+        } else if (data.type === "error") this.rejectInit?.(new Error(data.message));
       };
       this.send({ type: "init", options });
     });
@@ -52,7 +60,13 @@ export class PoseWorkerClient {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, (r) => (r instanceof Error ? reject(r) : resolve(r)));
-      this.send({ type: "frame", id, tMs, frame }, [frame]);
+      try {
+        this.send({ type: "frame", id, tMs, frame }, [frame]);
+      } catch (error) {
+        // e.g. DataCloneError on a detached bitmap: don't leave the client stuck busy
+        this.pending.delete(id);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
@@ -73,6 +87,7 @@ export class PoseWorkerClient {
   }
 
   private fail(error: Error, notify = true) {
+    this.rejectInit?.(error);
     for (const settle of this.pending.values()) settle(error);
     this.pending.clear();
     if (notify) this.onCrash?.(error);

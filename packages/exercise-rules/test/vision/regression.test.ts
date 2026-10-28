@@ -1,6 +1,12 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { aggregate, evaluateClip, type RepCounter, SquatAnalyzer } from "../../src";
+import {
+  aggregate,
+  type ClipEvaluation,
+  evaluateClip,
+  type RepCounter,
+  SquatAnalyzer,
+} from "../../src";
 import { exerciseDirs, loadExerciseFixtures, VISION_FIXTURES } from "./load";
 
 /**
@@ -11,6 +17,23 @@ import { exerciseDirs, loadExerciseFixtures, VISION_FIXTURES } from "./load";
 const ANALYZERS: Record<string, () => RepCounter> = {
   bodyweight_squat: () => new SquatAnalyzer(),
 };
+
+function report(title: string, evals: ClipEvaluation[]) {
+  console.log(title);
+  console.table(
+    evals.map((e) => ({
+      clip: e.clip_id,
+      labelled: e.labelled,
+      counted: e.counted,
+      tp: e.truePositives,
+      fp: e.falsePositives,
+      fn: e.falseNegatives,
+      untrackable: e.repsInUntrackable,
+      unreliable: `${Math.round(e.unreliableFrameRatio * 100)}%`,
+    })),
+  );
+  console.log(aggregate(evals));
+}
 
 describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
   const { gate, clips } = loadExerciseFixtures(join(VISION_FIXTURES, exerciseId), exerciseId);
@@ -23,26 +46,26 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
     expect(recorded).toBeGreaterThanOrEqual(gate.min_recorded_clips);
   });
 
-  it.runIf(make && clips.length > 0)("meets the gate and never counts in untrackable spans", () => {
-    const evals = clips.map((c) =>
-      evaluateClip(make!(), c.landmarks, c.labels, gate.match_tolerance_ms),
-    );
-    const summary = aggregate(evals);
-    console.table(
-      evals.map((e) => ({
-        clip: e.clip_id,
-        labelled: e.labelled,
-        counted: e.counted,
-        tp: e.truePositives,
-        fp: e.falsePositives,
-        fn: e.falseNegatives,
-        untrackable: e.repsInUntrackable,
-        unreliable: `${Math.round(e.unreliableFrameRatio * 100)}%`,
-      })),
-    );
-    console.log(`${exerciseId}:`, summary);
-    expect(summary.repsInUntrackable).toBe(0);
-    expect(summary.precision).toBeGreaterThanOrEqual(gate.min_precision);
-    expect(summary.recall).toBeGreaterThanOrEqual(gate.min_recall);
+  const gated = clips.filter((c) => c.landmarks.source.model === gate.runtime_model);
+  const compared = clips.filter((c) => c.landmarks.source.model !== gate.runtime_model);
+  const run = (set: typeof clips) =>
+    set.map((c) => evaluateClip(make!(), c.landmarks, c.labels, gate.match_tolerance_ms));
+
+  it.runIf(make && gated.length > 0)(
+    `meets the gate on ${gate.runtime_model} and never counts in untrackable spans`,
+    () => {
+      const evals = run(gated);
+      report(`${exerciseId} · ${gate.runtime_model} (gated)`, evals);
+      const summary = aggregate(evals);
+      // no vacuous pass: precision/recall are 1 when nothing is labelled (replay.ts)
+      expect(summary.truePositives + summary.falseNegatives).toBeGreaterThan(0);
+      expect(summary.repsInUntrackable).toBe(0);
+      expect(summary.precision).toBeGreaterThanOrEqual(gate.min_precision);
+      expect(summary.recall).toBeGreaterThanOrEqual(gate.min_recall);
+    },
+  );
+
+  it.runIf(make && compared.length > 0)("reports other models for comparison (not gated)", () => {
+    report(`${exerciseId} · other models (report only)`, run(compared));
   });
 });
