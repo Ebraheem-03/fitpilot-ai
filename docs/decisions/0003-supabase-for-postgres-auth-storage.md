@@ -6,7 +6,7 @@
 
 ## Context
 
-The blueprint wants PostgreSQL (+ optional pgvector), a managed identity provider to avoid custom auth, and object storage for GLB assets. Budget: free tiers (ADR-0006).
+The blueprint wants PostgreSQL (+ optional pgvector), a managed identity provider to avoid custom auth, and object storage for GLB assets (GLBs currently ship from `apps/web/public` instead — ADR-0009). Budget: free tiers (ADR-0006).
 
 ## Options considered
 
