@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const redirect = vi.fn((path: string) => {
@@ -8,7 +9,13 @@ vi.mock("next/navigation", () => ({ redirect }));
 const getAccessToken = vi.fn<() => Promise<string | null>>();
 vi.mock("@/lib/supabase/server", () => ({ getAccessToken }));
 
-const { getMyProfile } = await import("./api");
+const { getExercise, getMyProfile, listExercises } = await import("./api");
+const squat = JSON.parse(
+  readFileSync(
+    new URL("../../../../data/exercise-catalog/bodyweight_squat.json", import.meta.url),
+    "utf8",
+  ),
+);
 
 describe("apiFetch session handling", () => {
   beforeEach(() => {
@@ -43,5 +50,48 @@ describe("apiFetch session handling", () => {
     getAccessToken.mockResolvedValue(null);
     vi.stubGlobal("fetch", vi.fn());
     await expect(getMyProfile()).rejects.toThrow("REDIRECT:/session-expired");
+  });
+});
+
+describe("exercise catalogue", () => {
+  beforeEach(() => {
+    vi.stubEnv("API_BASE_URL", "http://api.test");
+    getAccessToken.mockResolvedValue("tok");
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("lists approved exercises, validated against the shared contract", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json([squat])),
+    );
+    expect((await listExercises()).map((e) => e.id)).toEqual(["bodyweight_squat"]);
+  });
+
+  it("rejects a response that breaks the contract instead of rendering it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json([{ ...squat, animation: undefined }])),
+    );
+    await expect(listExercises()).rejects.toThrow();
+  });
+
+  it("returns null for an exercise outside the catalogue", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await getExercise("made_up_move")).toBeNull();
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe(
+      "http://api.test/api/v1/exercises/made_up_move",
+    );
+  });
+
+  it("does not let an id escape the exercises path", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await getExercise("../users/me")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -103,7 +103,7 @@ export function ExerciseDemo({ exercise }: { exercise: DemoExercise }) {
   return (
     <section
       aria-label={`${exercise.name} demonstration`}
-      className="grid gap-6 md:grid-cols-[3fr_2fr]"
+      className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"
     >
       <div className="flex flex-col gap-3">
         <div

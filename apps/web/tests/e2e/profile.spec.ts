@@ -54,7 +54,7 @@ test("a different member does not see the first member's profile", async ({ brow
 test("member nav shows member links only; staff pages are not found", async ({ page }) => {
   await signUp(page);
   const nav = page.getByRole("navigation", { name: "Main" });
-  await expect(nav.getByRole("link")).toHaveText(["Home", "Profile"]);
+  await expect(nav.getByRole("link")).toHaveText(["Home", "Exercises", "Profile"]);
   // Role check streams inside <Suspense>, so the HTTP status is already 200 by then; assert
   // the rendered not-found state instead. Real access control lives in the API.
   await page.goto("/app/trainer");
