@@ -61,6 +61,8 @@ Coverage goal per exercise: varied camera distance and angle, lighting, clothing
 
 ### Recording protocol (bodyweight squat, M2 S3)
 
+Pexels stock footage (below) is now the main source. Use this protocol to add your own recordings, especially a phone propped at hip height in an ordinary room, which stock footage doesn't cover.
+
 Record yourself, or people who agreed to have their movement data published. Use a phone or laptop camera at hip height, landscape, about 30 fps. Each clip is 6–10 reps with a few seconds of standing before and after. Keep the videos on your disk; only the JSON from `/dev/capture` is committed.
 
 | #     | Camera | Facing in image | Distance | Light                   | Clothing | Notes                                                                                                                       |

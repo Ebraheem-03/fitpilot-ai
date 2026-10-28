@@ -108,8 +108,8 @@ export const ClipLabels = z
   });
 export type ClipLabels = z.infer<typeof ClipLabels>;
 
-/** Per-exercise acceptance gate, versioned next to the fixtures (data/…/<exercise>/gate.json). */
 /**
+ * Per-exercise acceptance gate, versioned next to the fixtures (data/…/<exercise>/gate.json).
  * Two jobs, judged separately (M2 calibration): counting reps on supported setups, and refusing
  * to count on unsupported ones. One mixed precision number would hide which of them failed.
  */
