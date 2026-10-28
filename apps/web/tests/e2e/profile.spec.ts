@@ -48,13 +48,17 @@ test("a different member does not see the first member's profile", async ({ brow
   await signUp(b);
   await b.goto("/app/profile");
   await expect(b).toHaveURL(/\/app\/onboarding$/); // B has no profile; A's is never shown
-  await expect(b.getByText("Get stronger")).toHaveCount(0);
+  // Wait for B's own (empty) onboarding form, then check no saved profile value is rendered.
+  // Plain getByText("Get stronger") would race: it also matches the form's <option>.
+  await expect(field(b, "Main goal")).toBeVisible();
+  await expect(b.getByTestId("profile")).toHaveCount(0);
+  await expect(b.getByRole("definition")).toHaveCount(0);
 });
 
 test("member nav shows member links only; staff pages are not found", async ({ page }) => {
   await signUp(page);
   const nav = page.getByRole("navigation", { name: "Main" });
-  await expect(nav.getByRole("link")).toHaveText(["Home", "Profile"]);
+  await expect(nav.getByRole("link")).toHaveText(["Home", "Exercises", "Profile"]);
   // Role check streams inside <Suspense>, so the HTTP status is already 200 by then; assert
   // the rendered not-found state instead. Real access control lives in the API.
   await page.goto("/app/trainer");

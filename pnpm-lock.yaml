@@ -105,13 +105,10 @@ importers:
       '@fitpilot/exercise-contracts':
         specifier: workspace:*
         version: link:../exercise-contracts
-      '@gltf-transform/core':
-        specifier: ^4
-        version: 4.5.1
-      three:
-        specifier: ^0.186.1
-        version: 0.186.1
     devDependencies:
+      '@gltf-transform/core':
+        specifier: 4.5.1
+        version: 4.5.1
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
@@ -121,6 +118,9 @@ importers:
       gltf-validator:
         specifier: 2.0.0-dev.3.10
         version: 2.0.0-dev.3.10
+      three:
+        specifier: 0.186.1
+        version: 0.186.1
       tsx:
         specifier: ^4
         version: 4.23.15

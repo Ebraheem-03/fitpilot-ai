@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewerError } from "./compat";
-import { type DemoExercise, ExerciseDemo } from "./ExerciseDemo";
+import { type DemoExercise, ExerciseDemo, LOAD_TIMEOUT_MS } from "./ExerciseDemo";
 import type { AvatarSceneProps } from "./AvatarScene";
 import type { PlaybackStore } from "./playback";
 
@@ -138,6 +138,16 @@ describe("ExerciseDemo (FR-03)", () => {
     expect(mocks.store!.getState()).toMatchObject({ status: "paused", time: 0 });
     fireEvent.keyDown(viewer(), { key: "ArrowRight" });
     expect(mocks.store!.getState().time).toBe(0.5);
+    // Browser chords (reload, back) are never captured
+    const reload = new KeyboardEvent("keydown", {
+      key: "r",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    viewer().dispatchEvent(reload);
+    expect(reload.defaultPrevented).toBe(false);
+    expect(mocks.store!.getState()).toMatchObject({ status: "paused", time: 0.5 });
     // Space on a button is the button's own business
     fireEvent.keyDown(button("Replay"), { key: " " });
     expect(viewer().dataset.status).toBe("paused");
@@ -192,11 +202,31 @@ describe("ExerciseDemo failure states (FR-03: handle missing or incompatible ass
     expect(mocks.load).not.toHaveBeenCalled();
   });
 
-  it("falls back when the 3D scene crashes while rendering", async () => {
+  it("falls back when the 3D scene crashes, and retry can recover", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.sceneThrows = true;
     render(<ExerciseDemo exercise={squat} />);
-    expect(await screen.findByText("Your browser or device can't show 3D graphics.")).toBeTruthy();
+    const fallback = await screen.findByTestId("viewer-fallback");
+    expect(within(fallback).getByText("The 3D demonstration stopped unexpectedly.")).toBeTruthy();
     expect(screen.getByText("Stand tall.")).toBeTruthy();
+    mocks.sceneThrows = false;
+    fireEvent.click(button("Try again"));
+    await screen.findByTestId("scene");
+    expect(viewer().dataset.status).toBe("ready");
+  });
+
+  it("gives up on a load that never finishes and offers a retry", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.load.mockReturnValue(new Promise(() => {}));
+      render(<ExerciseDemo exercise={squat} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
+      });
+      expect(viewer().dataset.status).toBe("error");
+      expect(within(screen.getByTestId("viewer-fallback")).getByText("Try again")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

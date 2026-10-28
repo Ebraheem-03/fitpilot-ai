@@ -17,6 +17,7 @@ export const FAILURE_MESSAGES: Record<ViewerFailure, string> = {
   corrupt: "The 3D demonstration file is damaged.",
   incompatible: "The 3D demonstration doesn't match this exercise yet.",
   webgl: "Your browser or device can't show 3D graphics.",
+  render: "The 3D demonstration stopped unexpectedly.",
 };
 
 /** Text for the polite live region: announced on state changes, not on every frame. */

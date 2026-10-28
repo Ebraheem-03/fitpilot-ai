@@ -1,7 +1,9 @@
 import type { AnimationPhase } from "@fitpilot/exercise-contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
+  coarseSnapshot,
   createPlaybackStore,
+  frameloopFor,
   initialPlayback,
   keyToAction,
   phaseAt,
@@ -147,8 +149,45 @@ describe("keyToAction", () => {
     ["ArrowLeft", { type: "seekBy", delta: -0.5 }],
     ["ArrowRight", { type: "seekBy", delta: 0.5 }],
     ["Enter", null],
+    ["R", { type: "replay" }],
+    ["K", { type: "toggle" }],
   ])("%j → %j", (key, action) => {
     expect(keyToAction(key)).toEqual(action);
+  });
+
+  it.each(["ctrlKey", "metaKey", "altKey"] as const)(
+    "leaves browser chords alone (%s)",
+    (modifier) => {
+      expect(keyToAction("r", { [modifier]: true })).toBeNull();
+      expect(keyToAction("ArrowLeft", { [modifier]: true })).toBeNull();
+    },
+  );
+});
+
+describe("coarseSnapshot", () => {
+  it("only produces a new snapshot when status or the 0.1 s time step changes", () => {
+    const store = createPlaybackStore(4);
+    const snapshot = coarseSnapshot(store);
+    store.dispatch({ type: "loaded", autoplay: true, reducedMotion: false });
+    const first = snapshot();
+    store.dispatch({ type: "tick", dt: 0.016 });
+    store.dispatch({ type: "tick", dt: 0.016 });
+    expect(snapshot()).toBe(first);
+    store.dispatch({ type: "tick", dt: 0.1 });
+    const later = snapshot();
+    expect(later).not.toBe(first);
+    expect(later.time).toBeCloseTo(0.132, 6);
+    store.dispatch({ type: "pause" });
+    expect(snapshot().status).toBe("paused");
+  });
+});
+
+describe("frameloopFor", () => {
+  it("renders continuously only while playing on screen", () => {
+    expect(frameloopFor(true, true)).toBe("always");
+    expect(frameloopFor(true, false)).toBe("demand");
+    expect(frameloopFor(false, true)).toBe("never");
+    expect(frameloopFor(false, false)).toBe("never");
   });
 });
 

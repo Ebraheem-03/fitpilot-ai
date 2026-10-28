@@ -45,4 +45,5 @@ The S0 spike (branch `spike/m1-s0-avatar`) looked at three sources:
 - Adding an exercise (M4) means writing a pose function, a depth curve and a phase list, then passing `assets:check`. That's code review, not Blender work, though writing natural-looking motion by hand takes care. Push-ups need hand contacts as a second IK target set.
 - The mannequin look is deliberate and documented. Swapping in a human-looking CC0 rig later only replaces `mesh.ts`/`skeleton.ts`; clips and checks stay.
 - Findings for the build: the proxy matcher currently runs Supabase session refresh on `*.glb` requests (exclude it in S4). Pages using the viewer must keep `searchParams`/cookies inside Suspense under Cache Components (seen on the spike page). Vercel may not gzip `model/gltf-binary`; measure in S7.
+- `/exercises/<id>/<asset>.glb` is public and skips the session proxy (`apps/web/src/proxy.ts`). Only CC0 demo assets may live there; anything user-specific or licensed must be served another way. Paths under `/app` always go through the proxy, whatever their extension (M1 security review).
 - ADR-0003's "object storage for GLB assets" is not used for now (decision 4).

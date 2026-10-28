@@ -8,7 +8,7 @@ export type PlaybackState =
   | { status: "loading" | "ready" | "playing" | "paused" | "ended"; time: number; duration: number }
   | { status: "error"; time: number; duration: number; reason: ViewerFailure };
 
-export type ViewerFailure = "missing" | "corrupt" | "incompatible" | "webgl";
+export type ViewerFailure = "missing" | "corrupt" | "incompatible" | "webgl" | "render";
 
 export type PlaybackAction =
   | { type: "loaded"; autoplay: boolean; reducedMotion: boolean }
@@ -81,9 +81,16 @@ export function phaseAt(
   return { index, span: timeline[index]! };
 }
 
-/** Keyboard shortcuts for the viewer region (NFR-Accessibility). */
-export function keyToAction(key: string): PlaybackAction | null {
-  switch (key) {
+/**
+ * Keyboard shortcuts for the viewer region (NFR-Accessibility). Chords with Ctrl/Cmd/Alt belong
+ * to the browser (reload, history), so they are never captured.
+ */
+export function keyToAction(
+  key: string,
+  modifiers: { ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {},
+): PlaybackAction | null {
+  if (modifiers.ctrlKey || modifiers.metaKey || modifiers.altKey) return null;
+  switch (key.length === 1 ? key.toLowerCase() : key) {
     case " ":
     case "k":
       return { type: "toggle" };
@@ -98,6 +105,12 @@ export function keyToAction(key: string): PlaybackAction | null {
     default:
       return null;
   }
+}
+
+/** The canvas renders continuously only while playing on screen; paused it renders on demand. */
+export function frameloopFor(onScreen: boolean, playing: boolean): "always" | "demand" | "never" {
+  if (!onScreen) return "never";
+  return playing ? "always" : "demand";
 }
 
 export interface PlaybackStore {
@@ -122,5 +135,23 @@ export function createPlaybackStore(duration: number): PlaybackStore {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+  };
+}
+
+/**
+ * Snapshot getter for React UI: returns the same object until the status or the 0.1 s time step
+ * changes, so controls re-render ~10×/s while playing instead of every frame.
+ */
+export function coarseSnapshot(store: PlaybackStore): () => PlaybackState {
+  let key = "";
+  let snapshot = store.getState();
+  return () => {
+    const state = store.getState();
+    const next = `${state.status}|${Math.round(state.time * 10)}`;
+    if (next !== key) {
+      key = next;
+      snapshot = state;
+    }
+    return snapshot;
   };
 }
