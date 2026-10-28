@@ -81,6 +81,18 @@ describe("mannequinLabels", () => {
     ]);
   });
 
+  it("labels a front-on clip as unsupported", () => {
+    const l = mannequinLabels({
+      clipId: "m",
+      exerciseId: "bodyweight_squat",
+      animation,
+      loops: 2,
+      blankLoops: [],
+      view: "front",
+    });
+    expect(l).toMatchObject({ camera_view: "front", facing: "camera", supported: false });
+  });
+
   it("turns blank loops into untrackable spans with no rep", () => {
     const l = mannequinLabels({
       clipId: "m",

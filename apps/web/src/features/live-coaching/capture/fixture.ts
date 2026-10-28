@@ -67,6 +67,8 @@ export function mannequinLabels(input: {
   animation: ExerciseAnimation;
   loops: number;
   blankLoops: number[];
+  /** front-on is outside the squat's supported setup: every count is a false positive */
+  view?: "side" | "front";
 }): ClipLabels {
   const { phases, duration_s } = input.animation;
   const find = (phase: string) => {
@@ -97,9 +99,9 @@ export function mannequinLabels(input: {
     format_version: FIXTURE_FORMAT_VERSION,
     clip_id: input.clipId,
     exercise_id: input.exerciseId,
-    camera_view: "side",
-    facing: "left",
-    supported: true,
+    camera_view: input.view ?? "side",
+    facing: input.view === "front" ? "camera" : "left",
+    supported: (input.view ?? "side") === "side",
     conditions: {
       lighting: "normal",
       clothing: "fitted",

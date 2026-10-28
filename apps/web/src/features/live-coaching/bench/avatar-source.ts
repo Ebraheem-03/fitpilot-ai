@@ -23,7 +23,12 @@ export class AvatarSource {
   private model: Object3D | null = null;
   private duration = 1;
 
-  constructor(canvas: HTMLCanvasElement, width = 640, height = 480) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    width = 640,
+    height = 480,
+    view: "side" | "front" = "side",
+  ) {
     this.canvas = canvas;
     this.renderer = new WebGLRenderer({ canvas, antialias: true });
     this.renderer.setSize(width, height, false);
@@ -34,7 +39,9 @@ export class AvatarSource {
     const sun = new DirectionalLight("#ffffff", 1.7);
     sun.position.set(2.5, 4, 3);
     this.scene.add(sun);
-    this.camera.position.set(3.4, 1.0, 0);
+    // side: the mannequin's left side faces the camera; front: it faces the camera
+    if (view === "side") this.camera.position.set(3.4, 1.0, 0);
+    else this.camera.position.set(0, 1.0, 3.4);
     this.camera.lookAt(0, 0.85, 0);
   }
 

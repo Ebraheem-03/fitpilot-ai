@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "clip_id": "mannequin_front_lite",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "front",
+  "facing": "camera",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "generated M1 mannequin (ADR-0009)"
+  },
+  "reps": [
+    { "start_ms": 500, "bottom_ms": 2200, "end_ms": 3600, "full_depth": true },
+    { "start_ms": 4500, "bottom_ms": 6200, "end_ms": 7600, "full_depth": true },
+    { "start_ms": 8500, "bottom_ms": 10200, "end_ms": 11600, "full_depth": true },
+    { "start_ms": 12500, "bottom_ms": 14200, "end_ms": 15600, "full_depth": true },
+    { "start_ms": 16500, "bottom_ms": 18200, "end_ms": 19600, "full_depth": true },
+    { "start_ms": 20500, "bottom_ms": 22200, "end_ms": 23600, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "generated"
+}
