@@ -59,6 +59,26 @@ Run it with `pnpm --filter @fitpilot/exercise-rules test:vision` (also part of `
 
 Coverage goal per exercise: varied camera distance and angle, lighting, clothing and body proportions. Record only people who consented. Only the derived JSON is committed. Landmarks carry no image, but they are still body data, so record yourself or people who agreed to have their movement published.
 
+### Recording protocol (bodyweight squat, M2 S3)
+
+Record yourself, or people who agreed to have their movement data published. Use a phone or laptop camera at hip height, landscape, about 30 fps. Each clip is 6–10 reps with a few seconds of standing before and after. Keep the videos on your disk; only the JSON from `/dev/capture` is committed.
+
+| #     | Camera | Facing in image | Distance | Light                   | Clothing | Notes                                                     |
+| ----- | ------ | --------------- | -------- | ----------------------- | -------- | --------------------------------------------------------- |
+| 1     | side   | left            | 2.5 m    | normal                  | fitted   | steady tempo                                              |
+| 2     | side   | right           | 2.5 m    | normal                  | fitted   | steady tempo                                              |
+| 3     | side   | left            | 3.5 m    | normal                  | loose    | fast tempo                                                |
+| 4     | side   | right           | 1.8 m    | normal                  | loose    | slow tempo                                                |
+| 5     | side   | left            | 2.5 m    | dim (one lamp)          | fitted   |                                                           |
+| 6     | side   | right           | 2.5 m    | backlit (window behind) | fitted   |                                                           |
+| 7     | side   | left            | 2.5 m    | normal                  | fitted   | about half the reps deliberately shallow                  |
+| 8     | side   | right           | 2.5 m    | normal                  | fitted   | walk out of frame mid-set for ~3 s, then back             |
+| 9     | ~45°   | left            | 2.5 m    | normal                  | fitted   | three-quarter view                                        |
+| 10    | front  | camera          | 2.5 m    | normal                  | fitted   | `supported: false`: the analyzer must count nothing       |
+| 11–12 | side   | either          | 2.5 m    | normal                  | any      | a second person if available (different body proportions) |
+
+Then, for each clip: run `make dev`, open `/dev/capture`, pick the file, set the clip id (`squat_side_001`, …), and click **Extract landmarks**. Set the camera, facing, lighting, clothing and distance fields, and set "supported" to off for row 10. Scrub through the video and mark each rep's start, bottom and end, plus any untrackable span (row 8). Download both JSON files into `vision/bodyweight_squat/`. Repeat with the model set to "full" (suffix `_full`) so S4 can compare the two models.
+
 ## ai/
 
 Versioned member profiles + requests + expected properties for the AI eval suite (blueprint §10). Synthetic people only — no real personal data.

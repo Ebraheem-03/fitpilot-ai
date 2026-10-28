@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-api db test verify ci e2e api-test api-lint
+.PHONY: setup dev dev-api db test verify ci e2e api-test api-lint bench-phone
 
 setup:            ## install all deps (JS + Python)
 	pnpm install
@@ -33,3 +33,8 @@ e2e:              ## Playwright vs local Supabase stack + local API (Docker; nev
 ci: verify        ## everything CI runs: verify + web build + e2e (needs `playwright install chromium`)
 	pnpm --filter @fitpilot/web build
 	$(MAKE) e2e
+
+bench-phone:      ## serve /dev/pose-bench on your Wi-Fi for an on-device run (ADR-0010); Ctrl-C stops it
+	cd apps/web && NEXT_PUBLIC_DEV_TOOLS=1 pnpm build
+	@echo "\nOn your phone (same Wi-Fi) open: http://$$(ipconfig getifaddr en0 || hostname -I | cut -d' ' -f1):3300/dev/pose-bench\n"
+	cd apps/web && NEXT_PUBLIC_DEV_TOOLS=1 pnpm exec next start -H 0.0.0.0 -p 3300
