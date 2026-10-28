@@ -50,7 +50,7 @@ function squats(
 }
 
 describe("SquatAnalyzer ruleset v2", () => {
-  it("is version 2", () => expect(SQUAT_RULESET.version).toBe(2));
+  it("is version 3", () => expect(SQUAT_RULESET.version).toBe(3));
 
   it("counts a person facing the other way (right side towards the camera)", () => {
     expect(squats(new SquatAnalyzer(), (d) => leg(d, "right")).reps).toBe(3);
@@ -156,6 +156,38 @@ describe("SquatAnalyzer ruleset v2", () => {
     const r = a.step(leg(95, "left"), (t += 33));
     expect(r.phase).toBe("standing");
     expect(r.features?.knee_angle_deg).toBeCloseTo(95, 0);
+  });
+
+  it("doesn't count a dip that never gets near squat depth (v3)", () => {
+    expect(squats(new SquatAnalyzer(), (d) => leg(d, "left"), { bottom: 150 }).reps).toBe(0);
+    expect(squats(new SquatAnalyzer(), (d) => leg(d, "left"), { bottom: 125 }).reps).toBe(3); // smoothing keeps the counted minimum a little above the raw one
+  });
+
+  it("doesn't count a knee bend whose feet travel (a step or lunge, v3)", () => {
+    let shift = 0;
+    const walking = (d: number) => leg(d, "left", { dx: (shift += 0.004) });
+    expect(squats(new SquatAnalyzer(), walking, { reps: 1 }).reps).toBe(0);
+  });
+
+  it("withholds with out_of_frame when a required landmark is outside the image (v3)", () => {
+    const f = leg(170, "left");
+    f.left_ankle = { ...f.left_ankle!, y: 1.08 }; // feet cut off: the model extrapolates
+    expect(new SquatAnalyzer().step(f, 0).tracking).toMatchObject({
+      reliable: false,
+      reason: "out_of_frame",
+    });
+  });
+
+  it("withholds a three-quarter view detected from depth (yaw, v3)", () => {
+    const f: LandmarkFrame = {
+      ...leg(170, "left"),
+      // side-on would put one shoulder/hip behind the other (Δz ≫ Δx); 45° gives Δz ≈ Δx
+      left_shoulder: { x: 0.5, y: 0.3, z: 0, visibility: 0.95 },
+      right_shoulder: { x: 0.56, y: 0.3, z: 0.06, visibility: 0.4 },
+      left_hip: { ...leg(170, "left").left_hip!, z: 0 },
+      right_hip: { x: leg(170, "left").left_hip!.x + 0.05, y: 0.6, z: 0.05, visibility: 0.4 },
+    };
+    expect(new SquatAnalyzer().step(f, 0).tracking.reason).toBe("unsupported_view");
   });
 
   it.each([10, 15, 30, 60])("counts the same squats at %i fps", (fps) => {

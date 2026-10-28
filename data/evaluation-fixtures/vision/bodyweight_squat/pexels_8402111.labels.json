@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_8402111",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "three_quarter",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 8402111: outdoor walkway, ~45 deg"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

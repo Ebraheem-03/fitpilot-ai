@@ -69,8 +69,15 @@ describe("decodeFrames", () => {
   it("maps packed numbers to named landmarks and null to an empty frame", () => {
     const f = fixture(1, (t) => t >= 33 && t < 66);
     const [first, second] = decodeFrames(f);
-    expect(first!.frame.left_knee).toEqual({ x: 0.5, y: 0.6, z: 0, visibility: 0.8 });
+    // 640×480: x is rescaled to image-height units (× 4/3), y stays
+    expect(first!.frame.left_knee).toEqual({ x: 0.5 * (640 / 480), y: 0.6, z: 0, visibility: 0.8 });
     expect(second!.frame).toEqual({});
+  });
+
+  it("corrects for the clip's aspect ratio so angles are true angles (portrait too)", () => {
+    const portrait = { ...fixture(1), source: { ...fixture(1).source, width: 360, height: 640 } };
+    const knee = decodeFrames(portrait)[0]!.frame.left_knee!;
+    expect(knee.x).toBeCloseTo(0.5 * (360 / 640));
   });
 });
 

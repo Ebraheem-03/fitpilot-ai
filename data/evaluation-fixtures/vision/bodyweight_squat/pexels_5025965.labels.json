@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_5025965",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 5025965: forest, dappled light, portrait; 8 deep reps ~2 s apart"
+  },
+  "reps": [
+    { "start_ms": 300, "bottom_ms": 1000, "end_ms": 1800, "full_depth": true },
+    { "start_ms": 2300, "bottom_ms": 3000, "end_ms": 3800, "full_depth": true },
+    { "start_ms": 4300, "bottom_ms": 5000, "end_ms": 5800, "full_depth": true },
+    { "start_ms": 6300, "bottom_ms": 7000, "end_ms": 7800, "full_depth": true },
+    { "start_ms": 8300, "bottom_ms": 9000, "end_ms": 9800, "full_depth": true },
+    { "start_ms": 10300, "bottom_ms": 11000, "end_ms": 11800, "full_depth": true },
+    { "start_ms": 12300, "bottom_ms": 13000, "end_ms": 13800, "full_depth": true },
+    { "start_ms": 14300, "bottom_ms": 15000, "end_ms": 15800, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

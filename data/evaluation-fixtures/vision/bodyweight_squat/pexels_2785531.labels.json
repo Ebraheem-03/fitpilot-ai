@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_2785531",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 2785531: outdoors, low camera; 3 reps then a low hold from ~9 s to the end (never stands: not a rep)"
+  },
+  "reps": [
+    { "start_ms": 1900, "bottom_ms": 2500, "end_ms": 3200, "full_depth": true },
+    { "start_ms": 4000, "bottom_ms": 4600, "end_ms": 5400, "full_depth": true },
+    { "start_ms": 6300, "bottom_ms": 7000, "end_ms": 7800, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

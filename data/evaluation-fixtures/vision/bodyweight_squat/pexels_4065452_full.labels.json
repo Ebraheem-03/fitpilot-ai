@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_4065452_full",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "backlit",
+    "clothing": "loose",
+    "notes": "Pexels 4065452: pier against a bright sky (silhouette); first rep starts at frame 0"
+  },
+  "reps": [
+    { "start_ms": 100, "bottom_ms": 1400, "end_ms": 2800, "full_depth": true },
+    { "start_ms": 4100, "bottom_ms": 5400, "end_ms": 7000, "full_depth": true },
+    { "start_ms": 8500, "bottom_ms": 9800, "end_ms": 11200, "full_depth": true },
+    { "start_ms": 12900, "bottom_ms": 14300, "end_ms": 15600, "full_depth": true },
+    { "start_ms": 16700, "bottom_ms": 18200, "end_ms": 19800, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

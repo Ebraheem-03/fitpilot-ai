@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_6022680",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "front",
+  "facing": "camera",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "loose",
+    "notes": "Pexels 6022680: prosthetic leg, park, front-on"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

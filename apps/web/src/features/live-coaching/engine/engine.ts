@@ -269,7 +269,12 @@ export class LiveEngine {
     if (generation !== this.generation || run !== this.run) return;
     if (this.state.session.status !== "running") return;
 
-    const frame = landmarks ? toLandmarkFrame(landmarks) : {};
+    // fallback 4:3 until the video reports its size (also what the test fixtures were made at)
+    const aspect =
+      this.video.videoWidth && this.video.videoHeight
+        ? this.video.videoWidth / this.video.videoHeight
+        : 4 / 3;
+    const frame = landmarks ? toLandmarkFrame(landmarks, aspect) : {};
     // Below the fps floor the state machine's timing is meaningless: don't advance it.
     const analysis = this.monitor.analysisAllowed ? this.analyzer.step(frame, tMs) : null;
     const tracking = this.monitor.observe({
@@ -277,7 +282,9 @@ export class LiveEngine {
       personDetected: landmarks !== null,
       analysisReliable: analysis?.tracking.reliable ?? false,
       confidence: analysis?.tracking.confidence ?? 0,
-      outOfFrame: landmarks !== null && isOutOfFrame(frame, this.required),
+      outOfFrame:
+        (landmarks !== null && isOutOfFrame(frame, this.required, aspect)) ||
+        analysis?.tracking.reason === "out_of_frame",
       luma: this.luma,
       unsupportedView: analysis?.tracking.reason === "unsupported_view",
     });

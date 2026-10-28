@@ -18,13 +18,24 @@ export interface RepCounter {
   ): { repCompleted: boolean; tracking: { reliable: boolean } };
 }
 
+/**
+ * Fixture frames → analyzer frames. Fixtures store MediaPipe's normalised coordinates (x / width,
+ * y / height); analyzers need true geometry, so x is rescaled to image-height units (see
+ * `LandmarkFrame`). Without this, portrait clips measure stretched angles (calibration finding).
+ */
 export function decodeFrames(fixture: LandmarkFixture): { tMs: number; frame: LandmarkFrame }[] {
+  const aspect = fixture.source.width / fixture.source.height;
   return fixture.frames.map(({ t_ms, p }) => {
     const frame: LandmarkFrame = {};
     if (p) {
       fixture.landmark_names.forEach((name, i) => {
         const o = i * FIXTURE_LANDMARK_STRIDE;
-        frame[name] = { x: p[o]!, y: p[o + 1]!, z: p[o + 2]!, visibility: p[o + 3]! };
+        frame[name] = {
+          x: p[o]! * aspect,
+          y: p[o + 1]!,
+          z: p[o + 2]! * aspect,
+          visibility: p[o + 3]!,
+        };
       });
     }
     return { tMs: t_ms, frame };

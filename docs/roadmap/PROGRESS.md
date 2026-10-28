@@ -1,7 +1,7 @@
 # Progress
 
-Current milestone: **M2 — Live vision engine** (planned 2026-10-28). M1 done 2026-10-28.
-Next up: **blocked on you**: (1) record the squat clips in `data/evaluation-fixtures/README.md` → S3, then S4 calibration closes M2's last box; (2) `make bench-phone` on a mid-range phone (ADR-0010 open item). The exit condition is already proven by `live-coaching.spec.ts` EXIT on main.
+Current milestone: **M2 — Live vision engine ✅ done 2026-10-28** (one open item: phone benchmark). M3 next.
+Next up: `/kickoff-milestone M3`. M2 open item for you: `make bench-phone` on a mid-range phone (ADR-0010). Later, a few clips filmed with a phone at hip height would help; stock footage has none.
 
 > Claude: read this file at the start of a session (the SessionStart hook prints the top of it).
 > Update it with `/handoff` at the end of a session. Keep it short — history lives in git.
@@ -26,7 +26,7 @@ Monorepo + CI, exercise contract with parity, DB + RLS, JWKS auth, profiles API,
 Evidence: `make verify` green (web 94, avatar 83, contracts 11, rules 8, API 79); `make e2e` 23/23. Page entry JS 13 KiB gz without three.js; lazy 3D 257 KiB gz; GLB 490 KiB (120 KiB gz).
 Deferred from M1: curl + push-up clips → M4 (add a `MotionDefinition` per `assets/README.md`) · syncing with a selected workout → M3 · viewer error telemetry → M2 with vision events · GLB `Content-Encoding` on Vercel → M5.
 
-### M2 — Live vision engine (wk 5–6)
+### M2 — Live vision engine (wk 5–6) ✅ done 2026-10-28
 
 **Exit (verbatim, §11):** "a member can perform a supported squat while the application tracks and counts repetitions, with explicit handling of unreliable tracking."
 **Proven by (planned, per ADR-0010):** (1) `apps/web/tests/e2e/live-coaching.spec.ts` EXIT: the real model in the real worker, fed by Chrome's fake camera playing a generated video of the M1 mannequin squatting (no real person; known rep count). The displayed rep count must equal it; blank segments must show "tracking not reliable" and freeze the count; stop must release the camera. (2) Real model with Chrome's default fake camera (no person) → "no person detected", 0 reps. (3) Vision regression over ≥10 real annotated clips meets the provisional gate: rep precision ≥ 0.95, recall ≥ 0.90, 0 reps counted inside `untrackable_ranges_ms`.
@@ -36,15 +36,15 @@ Already in the repo: `packages/exercise-rules` v1 (`assessTracking`, `jointAngle
 - [x] **S0 spike → ADR-0010** — worker + classic WASM (Turbopack emits classic workers), self-hosted runtime + sha-pinned models (`scripts/vendor-mediapipe.mjs`), lite model, `auto` delegate (CPU on software GL: GPU there ran at ≤10 fps and starved the page), warm-up in init (cold first inference up to 7.6 s), `ImageBitmap` transport. M1 Pro: worker lite 55–59 fps, page stays at 120 rAF/s; main-thread inference drops it to 61–110. WebKit + prod build OK. Numbers in `benchmarks.md`. **Phone run pending (you)**.
 - [x] **S1 fixture contract + vision regression runner** (#36) — `LandmarkFixture`/`ClipLabels`/`VisionGate` (TS-only), `evaluateClip`/`aggregate`, loader fails loudly (malformed, unpaired, stray files), gate per exercise folder runs in `pnpm test`; gate scores only the runtime model's fixtures and can't pass vacuously.
 - [x] **S2 local capture + annotation tool** (#37) — `/dev/capture` (dev-only): local video or synthetic mannequin → runtime worker at a fixed timestep → `landmarks.json`; rep/untrackable annotation → `labels.json`; no uploads (tested). First fixtures: `mannequin_side_{lite,full}` (6 loops, 1 hidden). Lite + analyzer v1: 5/5 reps, 0 counted while hidden. **Full model: 0/5**, because its left-leg estimate collapses (5–40°) when the legs overlap side-on → S4 needs a plausibility check + side fallback.
-- [ ] **S3 record + annotate ≥10 squat clips** (FR-05) · **you** record, vision-engineer annotates/QA · M · deps: S2. Matrix: side view facing left + right, 2 distances, normal + dim light, loose + fitted clothing, slow/fast tempo, a few shallow reps, plus negatives (walking out of frame mid-set, front view, partial body). Only landmark/label JSON lands in `data/evaluation-fixtures/vision/bodyweight_squat/`; videos stay on your disk. Accept: all fixtures validate; README lists the coverage matrix and consent note.
-- [ ] **S4 squat analyzer v2, calibrated** (FR-05) — **robustness done, calibration blocked on S3.** Ruleset v2 (catalogue `ruleset_version: 2`):
-  - **Side selection:** uses whichever side is visible and plausible, and sticks with it.
-  - **Plausibility:** the ankle must be below the knee, and thigh and shin lengths must be 0.45–1.4× the torso.
-  - **Front-view detection:** wide shoulders mean front-on, so it withholds with `unsupported_view`, which the UI shows.
-  - **Tracking loss:** a gap over 1 s abandons the in-progress rep.
-  - **Timing:** smoothing and velocity are time-based (same count at 10–60 fps).
-  - Fixtures: full model 0/5 → **5/5**; new `mannequin_front_lite` (unsupported) → 0 counted, 100% withheld.
-  - **Remaining:** tune thresholds against ≥10 recorded clips, raise `min_recorded_clips` to 10, and cite the metrics in the ruleset.
+- [x] **S3 annotated real clips**: from **Pexels stock footage instead of owner recordings** (owner decision, 2026-10-28). 25 clips: 11 side-view and 13 unsupported (front, three-quarter, body cut off). Landmarks were extracted with both models, and reps were labelled by eye from frame sheets. Videos aren't in git; credits are in `data/evaluation-fixtures/README.md`.
+- [x] **S4 analyzer calibrated: ruleset v3** (catalogue `ruleset_version: 3`).
+  - **Results (lite model):** counting on supported clips **48/48 reps, 0 false** (precision 1.00, recall 1.00). Refusal on unsupported clips 12/14 count nothing; the 2 leaks are a rear three-quarter view and a panning three-quarter view.
+  - **What calibration found and fixed:**
+    - **Aspect-ratio bug.** Normalised x/y measured stretched angles on portrait (phone) video, taking recall from 0.83 to 0.94.
+    - **Depth-to-count and feet-planted rules.** A bend-and-step pickup and a Smith-machine shot were counting as reps.
+    - **Out-of-frame rule.** Feet cut off by the frame were still counted.
+    - **Yaw view check.**
+  - **Gate split** (owner decision): counting is precision ≥ 0.95 / recall ≥ 0.90 on supported clips; refusal is ≥ 80% of unsupported clips counting nothing; at least 10 real recordings. The full model scores precision 0.87 / recall 0.94, which confirms lite as the runtime default.
 - [x] **S5 live engine** — `features/live-coaching/engine`: session machine (explicit start, permission, warm-up, pause/stop, named failures, one worker restart), `TrackingMonitor` (searching/tracking/unreliable + why: no person, out of frame, low visibility, low light, slow device; settle time; fps window, analysis withheld < 8 fps), `LiveEngine` with injected browser deps (`requestVideoFrameCallback`, `ImageBitmap`, luma sampling), `FixtureReplayPoseSource` for tests; stall watchdog (no analysed frame for 2 s ⇒ "camera picture has stopped updating"); one frame in flight end to end. Headers: `Permissions-Policy: camera=(self)`, narrow CSP (`worker-src`, `frame-ancestors 'none'`). **Privacy fix:** MediaPipe posts usage metrics to Google from the worker with no opt-out → the worker refuses cross-origin requests (ADR-0010 §9).
 - [x] **S6 live squat page** — `/app/exercises/[id]/live` (linked from the squat page): on-device explainer before the permission prompt, mirrored preview + skeleton, guidance per tracking issue, confidence meter, rep counter that says "Reps paused — tracking not reliable", pause/resume/stop, error states with retry, non-camera path; camera off on leave. Component tests per state; axe + phone width + keyboard in e2e.
 - [x] **S7 exit e2e + benchmarks** — EXIT green ×3 locally: real model in the worker, Chrome fake camera playing the generated mannequin feed (`fake-camera.setup.ts`), 5/5 reps, count frozen while hidden, 0 outbound requests, grab→published latency median 17 ms (end-to-end estimate ≈ 100 ms, ≤ 250). States spec: no person (real model, default fake camera), blocked camera, a11y/phone/keyboard.

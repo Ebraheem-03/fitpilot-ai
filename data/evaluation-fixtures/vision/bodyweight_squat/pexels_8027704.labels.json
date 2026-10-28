@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_8027704",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "loose",
+    "notes": "Pexels 8027704: head leaves the frame at the top of each rep (whole body not in frame)"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

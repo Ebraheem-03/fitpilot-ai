@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_9058264_full",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "front",
+  "facing": "camera",
+  "supported": false,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "loose",
+    "notes": "Pexels 9058264: older adult at home, front-on"
+  },
+  "reps": [],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

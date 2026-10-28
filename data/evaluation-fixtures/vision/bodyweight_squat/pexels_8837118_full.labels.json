@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_8837118_full",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "fitted",
+    "notes": "Pexels 8837118: home living room; slow tempo with ~2 s holds at the bottom; ends re-checked at 150 px"
+  },
+  "reps": [
+    { "start_ms": 800, "bottom_ms": 3000, "end_ms": 5300, "full_depth": true },
+    { "start_ms": 7700, "bottom_ms": 9600, "end_ms": 12400, "full_depth": true },
+    { "start_ms": 16300, "bottom_ms": 18200, "end_ms": 21000, "full_depth": true },
+    { "start_ms": 24600, "bottom_ms": 26600, "end_ms": 29300, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}

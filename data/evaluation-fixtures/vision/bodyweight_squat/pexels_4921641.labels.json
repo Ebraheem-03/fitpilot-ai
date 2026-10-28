@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "clip_id": "pexels_4921641",
+  "exercise_id": "bodyweight_squat",
+  "camera_view": "side",
+  "facing": "right",
+  "supported": true,
+  "conditions": {
+    "lighting": "normal",
+    "clothing": "loose",
+    "notes": "Pexels 4921641: gym rack, sandbag/barbell load; clip opens at the bottom of a rep (labelled: bottom and return visible)"
+  },
+  "reps": [
+    { "start_ms": 0, "bottom_ms": 400, "end_ms": 1700, "full_depth": true },
+    { "start_ms": 3100, "bottom_ms": 4000, "end_ms": 5200, "full_depth": true },
+    { "start_ms": 6300, "bottom_ms": 7100, "end_ms": 8200, "full_depth": true }
+  ],
+  "untrackable_ranges_ms": [],
+  "annotated_by": "claude-visual"
+}
