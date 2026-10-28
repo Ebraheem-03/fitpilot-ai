@@ -76,12 +76,12 @@ Already in the repo: `three` 0.186, `@react-three/fiber` 9, `drei` 10 installed 
 - [x] **S3 Playback controller (pure TS, TDD)** · FR-03 · `threed-engineer` + `test-engineer` · S · deps: S1
   - Tests (Vitest, no WebGL): states `loading → ready → playing ⇄ paused → ended`; `replay` from any state restarts at 0 and plays; `reset` returns to 0 paused; `seek` clamps; `phaseAt(t)` matches the contract timeline at boundaries; the current instruction follows the phase; `prefers-reduced-motion` ⇒ no autoplay; keyboard map (Space play/pause, R replay, Home reset, ←/→ seek).
   - Files: `apps/web/src/features/exercise-viewer/playback.ts` (+ `.test.ts`).
-- [ ] **S4 R3F viewer + accessible controls** · FR-03, NFR-Accessibility · `threed-engineer` · M · deps: S3 (spike GLB is enough to start; S2 for the final asset)
+- [x] **S4 R3F viewer + accessible controls** · FR-03, NFR-Accessibility · `threed-engineer` · M · deps: S3 (spike GLB is enough to start; S2 for the final asset)
   - Tests: component tests with the Canvas/three layer stubbed show that the buttons and keys drive the controller, that the buttons have names and `aria-pressed`, that the phase label sits in a polite live region, and that the scrubber is a labelled slider. View presets (front / side / 45°) + bounded orbit; `frameloop="demand"` while paused or off-screen; viewer loaded via `next/dynamic({ ssr: false })` inside Suspense.
-  - Files: `features/exercise-viewer/{ExerciseViewer.tsx,AvatarModel.tsx,ViewerControls.tsx,PhaseTimeline.tsx}` (+ tests).
-- [ ] **S5 Graceful failure states** · FR-03 · `threed-engineer` + `test-engineer` · S–M · deps: S4
+  - Files: `features/exercise-viewer/{ExerciseDemo.tsx,AvatarScene.tsx,LazyScene.tsx,labels.ts}` (+ `ExerciseDemo.test.tsx`); `src/proxy.ts` skips `*.glb`.
+- [x] **S5 Graceful failure states** (component tests here; the GLB-404 e2e lands with S7) · FR-03 · `threed-engineer` + `test-engineer` · S–M · deps: S4
   - Tests: each case shows a fallback panel that keeps the instructions and phase list, plus a retry where it makes sense, and never shows a blank area or crashes the page: GLB 404, corrupt GLB, incompatible GLB (clip missing or duration mismatch with the contract), WebGL unavailable, slow load (skeleton + still-usable page). Component tests for each, plus one e2e using `page.route` to 404 the GLB.
-  - Files: `features/exercise-viewer/{ViewerErrorBoundary.tsx,compat.ts,ViewerFallback.tsx}` (+ tests).
+  - Files: `features/exercise-viewer/{model.ts,compat.ts,webgl.ts,ViewerErrorBoundary.tsx}` (+ `compat.test.ts`), fallback inside `ExerciseDemo.tsx`.
 - [ ] **S6 Exercise library + squat detail page** · FR-03 (metadata + asset references) · main + `test-engineer` · M · deps: S1 (page), S4 (viewer slot)
   - Tests: `/app/exercises` lists the catalogue from the API (name, target muscles, equipment); `/app/exercises/[id]` shows metadata, instructions, technique considerations and phases, with the viewer in a slot that doesn't block render; an id not in the catalogue → `notFound()`; member nav gains "Exercises" (AppNav test updated); API types regenerated per ADR-0008.
   - Files: `src/app/app/exercises/{page.tsx,[id]/page.tsx}`, `src/features/exercise-library/`, `src/lib/{api.ts,api-types.ts}`, `src/features/shell/nav.ts`.

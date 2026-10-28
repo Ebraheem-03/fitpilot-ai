@@ -13,7 +13,7 @@ export type ViewerFailure = "missing" | "corrupt" | "incompatible" | "webgl";
 export type PlaybackAction =
   | { type: "loaded"; autoplay: boolean; reducedMotion: boolean }
   | { type: "failed"; reason: ViewerFailure }
-  | { type: "play" | "pause" | "toggle" | "replay" | "reset" }
+  | { type: "play" | "pause" | "toggle" | "replay" | "reset" | "retry" }
   | { type: "seek"; time: number }
   | { type: "seekBy"; delta: number }
   | { type: "tick"; dt: number };
@@ -30,7 +30,7 @@ export function playbackReducer(state: PlaybackState, action: PlaybackAction): P
   const { duration } = state;
   if (action.type === "failed")
     return { status: "error", time: 0, duration, reason: action.reason };
-  if (state.status === "error") return state;
+  if (state.status === "error") return action.type === "retry" ? initialPlayback(duration) : state;
   if (state.status === "loading") {
     if (action.type !== "loaded") return state;
     const autoplay = action.autoplay && !action.reducedMotion;
@@ -39,6 +39,7 @@ export function playbackReducer(state: PlaybackState, action: PlaybackAction): P
 
   switch (action.type) {
     case "loaded":
+    case "retry":
       return state;
     case "play":
       if (state.status === "playing") return state;
