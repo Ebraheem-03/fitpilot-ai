@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { LandmarkFixture } from "@fitpilot/exercise-contracts";
 import { SquatAnalyzer } from "@fitpilot/exercise-rules";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type EngineDeps, LiveEngine, type PoseSource } from "./engine";
+import { type EngineDeps, LiveEngine, type PoseSource, STALL_MS } from "./engine";
 import { FixtureReplayPoseSource } from "./testing/fixture-source";
 
 const FIXTURES = join(
@@ -34,6 +34,7 @@ function harness(
   const video = { srcObject: null as MediaStream | null, play: vi.fn(async () => {}) };
   let clock = 0;
   let queued: (() => void)[] = [];
+  let timers: { every: number; next: number; cb: () => void }[] = [];
   const sources: PoseSource[] = [];
   const deps: EngineDeps = {
     getUserMedia: vi.fn(opts.camera ?? (async () => stream)),
@@ -49,6 +50,11 @@ function harness(
       queued.push(cb);
       return () => (queued = queued.filter((q) => q !== cb));
     },
+    every: (ms, cb) => {
+      const timer = { every: ms, next: clock + ms, cb };
+      timers.push(timer);
+      return () => (timers = timers.filter((t) => t !== timer));
+    },
     now: () => clock,
   };
   const engine = new LiveEngine(deps, video as unknown as HTMLVideoElement, REQUIRED);
@@ -60,11 +66,20 @@ function harness(
       const due = queued;
       queued = [];
       for (const cb of due) cb();
+      for (const t of timers.filter((t) => t.next <= clock)) {
+        t.next += t.every;
+        t.cb();
+      }
       await new Promise((r) => setTimeout(r, 0));
       onFrame?.();
     }
   }
-  return { engine, deps, track, video, sources, play, snap: () => engine.getSnapshot() };
+  /** stop delivering video frames (frozen camera / background tab) while time passes */
+  const freeze = () => {
+    deps.scheduleFrame = () => () => {};
+    queued = [];
+  };
+  return { engine, deps, track, video, sources, play, freeze, snap: () => engine.getSnapshot() };
 }
 
 describe("LiveEngine (FR-04 live session, ADR-0010 §8)", () => {
@@ -184,6 +199,103 @@ describe("LiveEngine (FR-04 live session, ADR-0010 §8)", () => {
     expect(h.snap().session.status).toBe("stopped");
   });
 
+  it("says tracking has stalled when camera frames stop arriving", async () => {
+    const h = harness();
+    await h.engine.start();
+    await h.play(1000);
+    expect(h.snap().tracking.status).toBe("tracking");
+    h.freeze();
+    await h.play(STALL_MS + 600);
+    expect(h.snap().tracking).toMatchObject({ status: "unreliable", issue: "no_frames" });
+    expect(h.snap().session.status).toBe("running");
+  });
+
+  it("says tracking has stalled when every detection fails", async () => {
+    const failing = new FixtureReplayPoseSource(mannequin);
+    failing.detect = () => Promise.reject(new Error("bad frame"));
+    const h = harness({ source: () => failing });
+    await h.engine.start();
+    await h.play(STALL_MS + 600);
+    expect(h.snap().tracking.issue).toBe("no_frames");
+  });
+
+  it("recovers from a stall when frames come back", async () => {
+    const h = harness();
+    await h.engine.start();
+    await h.play(500);
+    const schedule = h.deps.scheduleFrame;
+    h.freeze();
+    await h.play(STALL_MS + 600);
+    h.deps.scheduleFrame = schedule;
+    h.engine.pause();
+    h.engine.resume();
+    await h.play(1000);
+    expect(h.snap().tracking.status).toBe("tracking");
+  });
+
+  it("keeps one frame in flight end to end, even while grabbing is slow", async () => {
+    const h = harness();
+    const pending: (() => void)[] = [];
+    h.deps.grabFrame = () =>
+      new Promise((r) => pending.push(() => r({ close() {} } as ImageBitmap)));
+    await h.engine.start();
+    const detect = vi.spyOn(h.sources[0]!, "detect");
+    await h.play(200); // several ticks while the first grab is pending
+    for (const release of pending) release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(pending).toHaveLength(1);
+    expect(detect).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes a frame that couldn't be handed to the worker", async () => {
+    const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+    const failing = new FixtureReplayPoseSource(mannequin);
+    failing.detect = () => Promise.reject(new DOMException("detached", "DataCloneError"));
+    const h = harness({ source: () => failing });
+    h.deps.grabFrame = async () => bitmap;
+    await h.engine.start();
+    await h.play(100);
+    expect(bitmap.close).toHaveBeenCalled();
+  });
+
+  it("asks for the camera once even if start is called twice", async () => {
+    const h = harness();
+    await Promise.all([h.engine.start(), h.engine.start()]);
+    expect(h.deps.getUserMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it("survives an analyzer that throws (no unhandled rejection, frame not counted)", async () => {
+    const h = harness();
+    h.deps.createAnalyzer = () => ({
+      step: () => {
+        throw new Error("bug");
+      },
+      reset: () => {},
+    });
+    const engine = new LiveEngine(h.deps, h.video as unknown as HTMLVideoElement, REQUIRED);
+    await engine.start();
+    await h.play(STALL_MS + 600);
+    expect(engine.getSnapshot()).toMatchObject({ reps: 0, session: { status: "running" } });
+    expect(engine.getSnapshot().tracking.issue).toBe("no_frames");
+  });
+
+  it("drops a result that was in flight when the member paused", async () => {
+    let finish!: () => void;
+    const slow = new FixtureReplayPoseSource(mannequin);
+    const detect = slow.detect.bind(slow);
+    const h = harness({ source: () => slow });
+    await h.engine.start();
+    await h.play(1000);
+    const before = h.snap();
+    slow.detect = (f, t) => new Promise((r) => (finish = () => r(detect(f, t))));
+    await h.play(40); // a frame goes in flight
+    h.engine.pause();
+    h.engine.resume();
+    finish();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.snap().landmarks).toBe(before.landmarks);
+  });
+
   it("reports a camera that disappears mid-session", async () => {
     const h = harness();
     await h.engine.start();
@@ -219,6 +331,7 @@ describe("LiveEngine (FR-04 live session, ADR-0010 §8)", () => {
     await h.engine.start();
     await h.play(24_000);
     expect(h.snap().tracking).toMatchObject({ status: "unreliable", issue: "slow_device" });
-    expect(h.snap().reps).toBeLessThanOrEqual(1); // only before the fps window filled
+    // the fps window needs ~2 s to fill; the lead-in is standing, so nothing can be counted
+    expect(h.snap().reps).toBe(0);
   });
 });

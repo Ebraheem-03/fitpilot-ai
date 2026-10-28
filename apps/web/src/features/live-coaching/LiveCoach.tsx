@@ -39,15 +39,22 @@ const primary =
 export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  const pauseRef = useRef<HTMLButtonElement>(null);
+  const stoppedRef = useRef<HTMLParagraphElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<LiveEngine | null>(null);
+  // Keyed by value: a new array identity for the same landmarks (router refresh, HMR) must not
+  // dispose the engine and switch the camera off mid-session.
+  const requiredKey = exercise.required_landmarks.join(",");
 
   useEffect(() => {
     const video = videoRef.current!;
     const create = analyzerFor(exercise.id)!;
-    const e = new LiveEngine(browserDeps(video, create), video, exercise.required_landmarks);
+    const required = requiredKey.split(",") as LandmarkName[];
+    const e = new LiveEngine(browserDeps(video, create), video, required);
     setEngine(e);
     return () => e.dispose(); // leaving the page always turns the camera off
-  }, [exercise.id, exercise.required_landmarks]);
+  }, [exercise.id, requiredKey]);
 
   const snap = useSyncExternalStore(
     engine?.subscribe ?? noop,
@@ -58,14 +65,25 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
   const live = session.status === "running" || session.status === "paused";
   const cameraOn = live || session.status === "loading";
 
+  // The control the member used disappears when the panel changes: move focus to where the
+  // next action is, but never steal it from somewhere they've moved to themselves.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    if (session.status === "running") pauseRef.current?.focus();
+    else if (session.status === "stopped") stoppedRef.current?.focus();
+    else if (session.status === "error") errorRef.current?.focus();
+  }, [session.status]);
+
   useEffect(() => {
     const canvas = overlayRef.current;
     const video = videoRef.current;
     if (!canvas || !video) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    const [w, h] = [video.videoWidth || 640, video.videoHeight || 480];
+    if (canvas.width !== w) canvas.width = w; // resizing reallocates: only when it changes
+    if (canvas.height !== h) canvas.height = h;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (landmarks && live) drawSkeleton(ctx, landmarks, { minVisibility: 0.6, mirrored: true });
   }, [landmarks, live]);
@@ -123,7 +141,12 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
       )}
 
       {session.status === "error" && (
-        <div role="alert" className="flex flex-col gap-2 rounded-xl border border-danger p-5">
+        <div
+          role="alert"
+          ref={errorRef}
+          tabIndex={-1}
+          className="flex flex-col gap-2 rounded-xl border border-danger p-5"
+        >
           <p className="font-semibold">{FAILURE_MESSAGES[session.reason].title}</p>
           <p className="text-sm">{FAILURE_MESSAGES[session.reason].detail}</p>
           {reps > 0 && <p className="text-sm">{reps} reps were counted before it stopped.</p>}
@@ -142,7 +165,9 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
 
       {session.status === "stopped" && (
         <div className="flex flex-col gap-2 rounded-xl border border-border p-5">
-          <p className="font-semibold">Camera off.</p>
+          <p className="font-semibold" ref={stoppedRef} tabIndex={-1}>
+            Camera off.
+          </p>
           <p className="text-sm" data-testid="final-reps">
             {reps} {reps === 1 ? "rep" : "reps"} counted.
           </p>
@@ -171,7 +196,8 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
           />
           {session.status === "loading" && (
             <p className="absolute inset-0 flex items-center justify-center bg-black/60 p-4 text-center text-white">
-              Preparing tracking… the first time this downloads about 20 MB.
+              Preparing tracking… the first time, this downloads the tracking model and can take a
+              little while.
             </p>
           )}
           {session.status === "paused" && (
@@ -198,6 +224,9 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
                 low={60}
                 optimum={100}
                 value={live ? percent : 0}
+                aria-valuetext={
+                  live && tracking.status !== "searching" ? `${percent} percent` : "not tracking"
+                }
                 className="w-full"
               />
             </label>
@@ -230,6 +259,7 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
             ) : (
               <button
                 type="button"
+                ref={pauseRef}
                 className={button}
                 disabled={session.status !== "running"}
                 onClick={() => engine?.pause()}

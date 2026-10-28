@@ -10,7 +10,9 @@ export type TrackingIssue =
   | "low_visibility"
   | "low_light"
   | "slow_device"
-  | "unsupported_view";
+  | "unsupported_view"
+  /** no analysed frame for a while: the camera picture or the tracker has stalled */
+  | "no_frames";
 
 export interface FrameObservation {
   tMs: number;
@@ -103,6 +105,20 @@ export class TrackingMonitor {
       slow: fps !== null && fps < this.cfg.slowFps,
     };
     if (settled) this.pending = null;
+    return this.shown;
+  }
+
+  /** Nothing has been analysed for a while: report it at once (no settle time). */
+  stall(): TrackingSnapshot {
+    this.times = [];
+    this.pending = null;
+    this.shown = {
+      status: "unreliable",
+      issue: "no_frames",
+      confidence: 0,
+      fps: null,
+      slow: false,
+    };
     return this.shown;
   }
 

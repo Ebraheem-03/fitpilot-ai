@@ -66,10 +66,11 @@ test("EXIT: the mannequin's squats are counted, and the count pauses while nobod
     if (b.reps > a.reps) expect([a.status, b.status]).toContain("tracking");
   }
 
-  // NFR feedback latency: camera frame → analysed result on screen, median ≤ 250 ms.
+  // Pipeline latency (frame grab → analysed result published), median. The NFR's end-to-end
+  // figure adds up to one camera frame interval and a paint; see benchmarks.md.
   const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
   console.log(
-    `live pipeline: latency median ${median(latency)} ms (n=${latency.length}), fps median ${median(fps)}`,
+    `live pipeline: grab→published latency median ${median(latency)} ms (n=${latency.length}), fps median ${median(fps)}`,
   );
   expect(median(latency)).toBeLessThanOrEqual(250);
 
