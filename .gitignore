@@ -47,3 +47,6 @@ data/evaluation-fixtures/vision/**/*.mov
 
 # self-hosted MediaPipe runtime + models, vendored by apps/web/scripts/vendor-mediapipe.mjs (ADR-0010)
 apps/web/public/mediapipe/
+
+# generated synthetic camera feed for live-coaching e2e (ADR-0010)
+apps/web/tests/e2e/.generated/

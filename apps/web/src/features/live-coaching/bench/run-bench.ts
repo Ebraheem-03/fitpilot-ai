@@ -1,3 +1,4 @@
+import { confineFetch } from "../worker/confine-fetch";
 import { PoseRunner } from "../worker/pose-runner";
 import { defaultAssetBases, PoseWorkerClient } from "../worker/pose-client";
 import type { PoseDelegate, PoseModel } from "../worker/protocol";
@@ -75,6 +76,10 @@ export async function runBenchConfig(
   let longTasks: number | null = null;
   let longTaskMs: number | null = null;
 
+  // Main-thread MediaPipe would post its usage metrics from the page (ADR-0010 §9): confine the
+  // page's fetch to this origin for the run and restore it afterwards.
+  const pageFetch = window.fetch;
+  if (cfg.thread === "main") confineFetch(window);
   const client = cfg.thread === "worker" ? new PoseWorkerClient() : null;
   const runner = cfg.thread === "main" ? new PoseRunner() : null;
   const initStart = performance.now();
@@ -83,6 +88,7 @@ export async function runBenchConfig(
     actualDelegate = client ? (await client.init(options)).delegate : await runner!.init(options);
   } catch (error) {
     client?.terminate();
+    window.fetch = pageFetch;
     return { ...cfg, ...emptyRow(), actualDelegate: "CPU", error: String(error) };
   }
   const initMs = performance.now() - initStart;
@@ -148,6 +154,7 @@ export async function runBenchConfig(
       }
     }
   } finally {
+    window.fetch = pageFetch;
     observer?.disconnect();
     client?.terminate();
     runner?.close();

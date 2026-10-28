@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { listLabel } from "@/features/exercise-library/labels";
+import { analyzerFor } from "@/features/live-coaching/analyzers";
 import { ExerciseDemo } from "@/features/exercise-viewer/ExerciseDemo";
 import { getExercise } from "@/lib/api";
 
@@ -40,6 +41,14 @@ async function ExerciseDetail({ params }: Pick<PageProps<"/app/exercises/[id]">,
         </dl>
       </header>
       <ExerciseDemo exercise={exercise} />
+      {analyzerFor(exercise.id) && (
+        <Link
+          href={`/app/exercises/${exercise.id}/live`}
+          className="self-start rounded-md bg-brand px-4 py-2 font-medium text-brand-foreground hover:bg-brand-hover"
+        >
+          Track your reps with the camera
+        </Link>
+      )}
       {exercise.technique_considerations.length > 0 && (
         <section className="rounded-xl border border-border p-5">
           <h2 className="font-semibold">Technique notes</h2>

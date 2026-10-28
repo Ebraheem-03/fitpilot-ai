@@ -12,7 +12,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 /**
  * Synthetic frame source (pose benchmark, capture tool, e2e camera feed): the M1 squat mannequin rendered side-on into a
- * 640×480 canvas. No real person, deterministic, works on any device without a camera.
+ * canvas (640×480 by default). No real person, deterministic, works on any device without a camera.
  */
 export class AvatarSource {
   readonly canvas: HTMLCanvasElement;
@@ -23,10 +23,12 @@ export class AvatarSource {
   private model: Object3D | null = null;
   private duration = 1;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, width = 640, height = 480) {
     this.canvas = canvas;
     this.renderer = new WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setSize(640, 480, false);
+    this.renderer.setSize(width, height, false);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
     this.scene.background = new Color("#d8dbe0");
     this.scene.add(new HemisphereLight("#ffffff", "#8a8f98", 1.3));
     const sun = new DirectionalLight("#ffffff", 1.7);

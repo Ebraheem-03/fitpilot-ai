@@ -3,14 +3,14 @@ import {
   type ClipLabels,
   ExerciseContract,
   type LandmarkFixture,
-  MEDIAPIPE_POSE_INDEX,
 } from "@fitpilot/exercise-contracts";
 import { useEffect, useRef, useState } from "react";
 import squatCatalog from "../../../../../../data/exercise-catalog/bodyweight_squat.json";
 import { AvatarSource } from "../bench/avatar-source";
+import { unpackFixtureFrame } from "../landmarks";
 import { drawSkeleton } from "../skeleton";
 import { defaultAssetBases, PoseWorkerClient } from "../worker/pose-client";
-import { LANDMARK_STRIDE, POSE_LANDMARK_COUNT, type PoseModel } from "../worker/protocol";
+import type { PoseModel } from "../worker/protocol";
 import { extractLandmarks, type StepSource, videoFileSource } from "./extract";
 import { buildLandmarkFixture, type CapturedFrame, mannequinLabels } from "./fixture";
 
@@ -31,18 +31,6 @@ function download(name: string, data: unknown) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-/** Packed fixture frame → 33-point layout for the overlay (unnamed points stay invisible). */
-function unpack(fixture: LandmarkFixture, frameIndex: number): Float32Array | null {
-  const p = fixture.frames[frameIndex]?.p;
-  if (!p) return null;
-  const out = new Float32Array(POSE_LANDMARK_COUNT * LANDMARK_STRIDE);
-  fixture.landmark_names.forEach((name, i) => {
-    const o = MEDIAPIPE_POSE_INDEX[name] * LANDMARK_STRIDE;
-    out.set(p.slice(i * 4, i * 4 + 4), o);
-  });
-  return out;
 }
 
 /**
@@ -116,7 +104,7 @@ export function CaptureTool() {
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const i = Math.round(nowMs() / (1000 / fixture.source.fps));
-    const lm = unpack(fixture, i);
+    const lm = unpackFixtureFrame(fixture, i);
     if (lm) drawSkeleton(ctx, lm, { minVisibility: 0.6, mirrored: false });
   }
 

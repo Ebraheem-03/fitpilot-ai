@@ -51,6 +51,10 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
   const run = (set: typeof clips) =>
     set.map((c) => evaluateClip(make!(), c.landmarks, c.labels, gate.match_tolerance_ms));
 
+  it("has fixtures from the runtime model, so the gate can't be skipped", () => {
+    expect(gated.length).toBeGreaterThan(0);
+  });
+
   it.runIf(make && gated.length > 0)(
     `meets the gate on ${gate.runtime_model} and never counts in untrackable spans`,
     () => {
