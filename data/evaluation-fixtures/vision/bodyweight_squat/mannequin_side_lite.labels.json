@@ -18,5 +18,23 @@
     { "start_ms": 20500, "bottom_ms": 22200, "end_ms": 23600, "full_depth": true }
   ],
   "untrackable_ranges_ms": [[12000, 16000]],
-  "annotated_by": "generated"
+  "annotated_by": "generated",
+  "cue_labels": {
+    "rules": [
+      {
+        "rule_id": "squat.depth.shallow",
+        "method": "synthetic_ground_truth",
+        "expected_reps": [],
+        "not_expected_reps": [0, 1, 2, 3, 4],
+        "notes": "Generated mannequin: every rep reaches the authored full depth (thighs about parallel, packages/avatar SQUAT_PARAMS)."
+      },
+      {
+        "rule_id": "squat.torso.forward_lean",
+        "method": "synthetic_ground_truth",
+        "expected_reps": [],
+        "not_expected_reps": [0, 1, 2, 3, 4],
+        "notes": "Generated mannequin: authored trunk hinge at the bottom is pelvis 18 + spine 10 + chest 8 deg (SQUAT_PARAMS), an ordinary squat lean."
+      }
+    ]
+  }
 }

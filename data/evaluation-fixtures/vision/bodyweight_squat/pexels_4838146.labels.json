@@ -12,5 +12,23 @@
   },
   "reps": [],
   "untrackable_ranges_ms": [],
-  "annotated_by": "claude-visual"
+  "annotated_by": "claude-visual",
+  "cue_labels": {
+    "rules": [
+      {
+        "rule_id": "squat.depth.shallow",
+        "method": "from_rep_labels",
+        "expected_reps": [],
+        "not_expected_reps": [],
+        "notes": "From the by-eye full_depth rep labels (frame sheets, M2 S3): a full-depth rep doesn't warrant 'sit deeper', a not-full-depth one does."
+      },
+      {
+        "rule_id": "squat.torso.forward_lean",
+        "method": "from_rep_labels",
+        "expected_reps": [],
+        "not_expected_reps": [],
+        "notes": "Lean not judged by eye (the video is no longer available). Only cues outside the labelled reps are scored, as wrong."
+      }
+    ]
+  }
 }

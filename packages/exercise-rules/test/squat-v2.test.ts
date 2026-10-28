@@ -50,7 +50,8 @@ function squats(
 }
 
 describe("SquatAnalyzer ruleset v2", () => {
-  it("is version 3", () => expect(SQUAT_RULESET.version).toBe(3));
+  // v4 (squat-v4.test.ts) only adds a cue rule: everything below still holds
+  it("is version 3 or later", () => expect(SQUAT_RULESET.version).toBeGreaterThanOrEqual(3));
 
   it("counts a person facing the other way (right side towards the camera)", () => {
     expect(squats(new SquatAnalyzer(), (d) => leg(d, "right")).reps).toBe(3);

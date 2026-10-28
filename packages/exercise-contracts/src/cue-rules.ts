@@ -18,6 +18,10 @@ export const CUE_RULES: Readonly<Record<string, CueRuleDeclaration>> = {
     exercise_id: "bodyweight_squat",
     measurements: ["min_knee_angle_deg"],
   },
+  "squat.torso.forward_lean": {
+    exercise_id: "bodyweight_squat",
+    measurements: ["trunk_lean_deg", "min_knee_angle_deg"],
+  },
 };
 
 /** Why a cue's (rule, exercise, measurement keys) combination is not allowed; null when it is. */
