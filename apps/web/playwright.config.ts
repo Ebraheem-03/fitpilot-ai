@@ -26,7 +26,7 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: `pnpm exec next dev --port ${WEB_PORT}`,
+      command: `node scripts/vendor-mediapipe.mjs && pnpm exec next dev --port ${WEB_PORT}`,
       url: `http://localhost:${WEB_PORT}`,
       reuseExistingServer: false,
       env: { API_BASE_URL: `http://localhost:${API_PORT}` },
