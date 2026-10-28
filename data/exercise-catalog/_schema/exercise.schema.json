@@ -36,9 +36,55 @@
         "enum": ["side", "front", "front_45"]
       }
     },
-    "animation_asset": {
-      "type": "string",
-      "pattern": "\\.glb$"
+    "animation": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+\\.glb$"
+        },
+        "clip": {
+          "type": "string",
+          "minLength": 1
+        },
+        "duration_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "phases": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "type": "string",
+                "minLength": 1
+              },
+              "start_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "end_s": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "instruction_indices": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              }
+            },
+            "required": ["phase", "start_s", "end_s", "instruction_indices"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["asset", "clip", "duration_s", "phases"],
+      "additionalProperties": false
     },
     "supported_capabilities": {
       "minItems": 1,
@@ -108,7 +154,7 @@
     "equipment",
     "target_muscles",
     "camera_views",
-    "animation_asset",
+    "animation",
     "supported_capabilities",
     "required_landmarks",
     "ruleset_version",
