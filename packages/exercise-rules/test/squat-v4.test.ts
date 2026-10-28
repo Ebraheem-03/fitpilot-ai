@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  CUE_RULES,
+  CUE_RULE_DEFINITIONS,
   explainCue,
   type FeedbackCue,
   type LandmarkFrame,
@@ -140,7 +140,7 @@ describe("cue rule declarations and explanations", () => {
       "squat.depth.shallow",
       "squat.torso.forward_lean",
     ]);
-    const ids = CUE_RULES.map((r) => r.message_id);
+    const ids = CUE_RULE_DEFINITIONS.map((r) => r.message_id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
@@ -157,7 +157,7 @@ describe("cue rule declarations and explanations", () => {
     }
   });
 
-  it.each(CUE_RULES.map((r) => [r.message_id, r] as const))(
+  it.each(CUE_RULE_DEFINITIONS.map((r) => [r.message_id, r] as const))(
     "%s has a plain-language explanation and labelled measurements",
     (messageId, rule) => {
       const e = explainCue(messageId);
@@ -168,7 +168,7 @@ describe("cue rule declarations and explanations", () => {
     },
   );
 
-  it.each(CUE_RULES.map((r) => [r.message_id, r] as const))(
+  it.each(CUE_RULE_DEFINITIONS.map((r) => [r.message_id, r] as const))(
     "%s describes movement, never a medical or safety conclusion",
     (_id, rule) => {
       const text = `${rule.message} ${rule.explanation}`;

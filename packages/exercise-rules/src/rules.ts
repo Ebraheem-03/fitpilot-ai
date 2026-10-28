@@ -9,9 +9,14 @@ export const RULES_BY_EXERCISE: Readonly<Record<string, readonly CueRule[]>> = {
   bodyweight_squat: SQUAT_RULES,
 };
 
-export const CUE_RULES: readonly CueRule[] = Object.values(RULES_BY_EXERCISE).flat();
+/**
+ * All rule definitions, flattened. Not the same thing as the contract's `CUE_RULES`
+ * (`@fitpilot/exercise-contracts`), which declares only rule → exercise + measurement keys for
+ * event validation; a test keeps the two in step.
+ */
+export const CUE_RULE_DEFINITIONS: readonly CueRule[] = Object.values(RULES_BY_EXERCISE).flat();
 
-const BY_MESSAGE = new Map(CUE_RULES.map((r) => [r.message_id, r]));
+const BY_MESSAGE = new Map(CUE_RULE_DEFINITIONS.map((r) => [r.message_id, r]));
 
 /**
  * "What this cue means" (FR-06) for a cue's `message_id`: the cue text, its plain-language
