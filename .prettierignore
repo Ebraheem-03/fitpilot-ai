@@ -11,3 +11,6 @@ assets
 # local Supabase (generated per machine / CI job)
 supabase/signing_keys.json
 supabase/.temp
+
+# vendored MediaPipe runtime (ADR-0010)
+apps/web/public/mediapipe

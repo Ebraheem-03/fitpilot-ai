@@ -44,3 +44,6 @@ data/evaluation-fixtures/vision/**/*.mov
 .DS_Store
 .idea/
 *.swp
+
+# self-hosted MediaPipe runtime + models, vendored by apps/web/scripts/vendor-mediapipe.mjs (ADR-0010)
+apps/web/public/mediapipe/
