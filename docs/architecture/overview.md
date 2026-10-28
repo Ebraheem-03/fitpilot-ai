@@ -28,7 +28,7 @@ flowchart LR
 
 ## Boundaries that must not erode
 
-1. Nothing below the worker line leaves the device except `SessionEvent`s.
+1. Nothing below the worker line leaves the device except `SessionEvent`s, and only after the camera stops and the member has consented (ADR-0011).
 2. The API is the authority for permissions, plans, history. The browser never writes to the DB directly.
 3. The LLM only sees authorized context and can only act through validated tools.
 4. Contracts in `packages/exercise-contracts` are the single shape for exercises and events.
