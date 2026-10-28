@@ -16,7 +16,9 @@ type Side = "left" | "right";
  *   knee; thigh and shin within segmentToTorso × torso length). v2: pose models can place a
  *   fully "visible" near-side leg on top of the far one when the legs overlap side-on (S2 finding:
  *   full model, 5–40° knee angles while standing), so visibility alone isn't evidence.
- * - Withhold: no plausible side; a required landmark outside the image (out_of_frame); front-on
+ * - Withhold: no plausible side; a required landmark outside the image (out_of_frame: top,
+ *   bottom and left edges; the right edge depends on the aspect ratio, which only the live engine
+ *   knows and checks); front-on
  *   or three-quarter view (shoulder width / torso > maxShoulderToTorso, or yaw < minYawDeg);
  *   a rep interrupted by > maxGapMs of unreliable tracking is abandoned, never guessed.
  * - Count: back to standing after ≥ minRepMs, with the knee at ≤ countMaxKneeAngle at some point
@@ -210,6 +212,9 @@ export class SquatAnalyzer {
     this.lastReliableT = null;
     this.minKneeThisRep = Infinity;
     this.repStartedAt = null;
+    this.repAnkle = null;
+    this.ankleDrift = 0;
+    this.outOfFrame = false;
   }
 
   /** Keeps the current side while it stays usable, so the angle doesn't hop between legs. */

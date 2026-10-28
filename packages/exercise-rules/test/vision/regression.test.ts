@@ -42,7 +42,11 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
   it("has a registered analyzer", () => expect(make).toBeDefined());
 
   it(`has ≥ ${gate.min_recorded_clips} recorded (non-synthetic) clips`, () => {
-    const recorded = clips.filter((c) => c.landmarks.source.kind === "recording").length;
+    // distinct videos, counted once: the same clip extracted with two models is one recording
+    const recorded = clips.filter(
+      (c) =>
+        c.landmarks.source.kind === "recording" && c.landmarks.source.model === gate.runtime_model,
+    ).length;
     expect(recorded).toBeGreaterThanOrEqual(gate.min_recorded_clips);
   });
 
