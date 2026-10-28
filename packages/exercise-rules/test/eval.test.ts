@@ -1,6 +1,13 @@
 import type { ClipLabels, LandmarkFixture } from "@fitpilot/exercise-contracts";
 import { describe, expect, it } from "vitest";
-import { aggregate, decodeFrames, evaluateClip, type RepCounter } from "../src";
+import {
+  aggregate,
+  aggregateCues,
+  decodeFrames,
+  evaluateClip,
+  type FeedbackCue,
+  type RepCounter,
+} from "../src";
 
 /** 30 fps clip of `seconds`, every frame with all landmarks visible except where `blank(t)`. */
 function fixture(seconds: number, blank: (t: number) => boolean = () => false): LandmarkFixture {
@@ -46,15 +53,37 @@ function labels(reps: [number, number][], extra: Partial<ClipLabels> = {}): Clip
   };
 }
 
-/** Completes a rep on the first frame at or after each scripted time. */
-function scripted(times: number[]): RepCounter {
+const fakeCue = (rule_id: string): FeedbackCue => ({
+  rule_id,
+  ruleset_version: 1,
+  message_id: `${rule_id}_v1`,
+  message: "m",
+  measurements: { v: 1 },
+  priority: 1,
+});
+
+/**
+ * Completes a rep on the first frame at or after each scripted time, emitting the rule ids in
+ * `cuesAt[time]` on that frame. `cueOnly` times emit a cue without completing a rep.
+ */
+function scripted(
+  times: number[],
+  cuesAt: Record<number, string[]> = {},
+  cueOnly: number[] = [],
+): RepCounter {
   const queue = [...times];
+  const strays = [...cueOnly];
   return {
     step(frame, tMs) {
       const reliable = Object.keys(frame).length > 0;
       const repCompleted = queue.length > 0 && tMs >= queue[0]!;
-      if (repCompleted) queue.shift();
-      return { repCompleted, tracking: { reliable } };
+      const cues: FeedbackCue[] = [];
+      if (repCompleted) cues.push(...(cuesAt[queue.shift()!] ?? []).map(fakeCue));
+      if (strays.length > 0 && tMs >= strays[0]!) {
+        strays.shift();
+        cues.push(fakeCue("r.x"));
+      }
+      return { repCompleted, tracking: { reliable }, cues };
     },
   };
 }
@@ -154,5 +183,138 @@ describe("aggregate", () => {
 
   it("is vacuously perfect with nothing to count", () => {
     expect(aggregate([])).toMatchObject({ precision: 1, recall: 1 });
+  });
+});
+
+describe("cue scoring (M3 S2)", () => {
+  // rule r.x: rep 0 warrants the cue, reps 1 and 2 don't
+  const cueLabels = (over: Partial<ClipLabels> = {}) =>
+    labels(REPS, {
+      cue_labels: {
+        rules: [
+          { rule_id: "r.x", method: "by_eye", expected_reps: [0], not_expected_reps: [1, 2] },
+        ],
+      },
+      ...over,
+    });
+  const score = (counter: RepCounter, l = cueLabels()) =>
+    evaluateClip(counter, fixture(10), l, 300);
+
+  it("scores a cue on an expected rep as a true positive and silence as a true negative", () => {
+    const e = score(scripted([2900, 5900, 8900], { 2900: ["r.x"] }));
+    expect(e.cueScores).toEqual([
+      expect.objectContaining({
+        rule_id: "r.x",
+        method: "by_eye",
+        expected: 1,
+        judgedNegatives: 2,
+        truePositives: 1,
+        falsePositives: 0,
+        falseNegatives: 0,
+        stray: 0,
+      }),
+    ]);
+  });
+
+  it("scores a cue on a not-expected rep as a false positive, a missed one as a false negative", () => {
+    const e = score(scripted([2900, 5900, 8900], { 5900: ["r.x"] }));
+    expect(e.cueScores[0]).toMatchObject({
+      truePositives: 0,
+      falsePositives: 1,
+      falseNegatives: 1,
+    });
+  });
+
+  it("scores a cue outside every labelled rep as a stray false positive", () => {
+    const e = score(scripted([2900, 5900, 8900], { 2900: ["r.x"] }, [3500]));
+    expect(e.cueScores[0]).toMatchObject({ truePositives: 1, falsePositives: 1, stray: 1 });
+  });
+
+  it("scores a second cue of the same rule on one rep as a stray (one judgement per rep)", () => {
+    const e = score(scripted([2900, 5900, 8900], { 2900: ["r.x", "r.x"] }));
+    expect(e.cueScores[0]).toMatchObject({ truePositives: 1, falsePositives: 1, stray: 1 });
+  });
+
+  it("attributes a cue to the rep whose end it is nearest when tolerance windows overlap", () => {
+    const close: [number, number][] = [
+      [1000, 3000],
+      [3200, 3600],
+    ];
+    const l = labels(close, {
+      cue_labels: {
+        rules: [{ rule_id: "r.x", method: "by_eye", expected_reps: [1], not_expected_reps: [0] }],
+      },
+    });
+    // with ±600 ms, 3550 is inside both windows; it ends rep 1 (50 ms), not rep 0 (550 ms)
+    const e = evaluateClip(scripted([3550], { 3550: ["r.x"] }), fixture(10), l, 600);
+    expect(e.cueScores[0]).toMatchObject({ truePositives: 1, falsePositives: 0 });
+  });
+
+  it("doesn't score rules the clip doesn't annotate, or reps left unjudged", () => {
+    const l = labels(REPS, {
+      cue_labels: {
+        rules: [{ rule_id: "r.x", method: "by_eye", expected_reps: [], not_expected_reps: [0] }],
+      },
+    });
+    const e = evaluateClip(
+      scripted([2900, 5900], { 2900: ["r.y"], 5900: ["r.x"] }),
+      fixture(10),
+      l,
+      300,
+    );
+    expect(e.cueScores).toEqual([
+      expect.objectContaining({
+        rule_id: "r.x",
+        judgedNegatives: 1,
+        falsePositives: 0,
+        unjudged: 1,
+      }),
+    ]);
+    expect(e.cuesEmitted.map((c) => c.cue.rule_id)).toEqual(["r.y", "r.x"]);
+  });
+
+  it("counts cues inside untrackable spans", () => {
+    const l = cueLabels({ untrackable_ranges_ms: [[5000, 6500]] });
+    expect(score(scripted([2900, 5900], { 5900: ["r.x"] }), l).cuesInUntrackable).toBe(1);
+  });
+
+  it("aggregates: false-positive rate over chances to be wrong, cues on unsupported clips", () => {
+    const good = score(scripted([2900, 5900, 8900], { 2900: ["r.x"] }));
+    const wrong = score(scripted([2900, 5900, 8900], { 2900: ["r.x"], 8900: ["r.x"] }));
+    const unsupported = evaluateClip(
+      scripted([2900], { 2900: ["r.x"] }),
+      fixture(10),
+      labels(REPS, { supported: false, camera_view: "front" }),
+      300,
+    );
+    const s = aggregateCues([good, wrong, unsupported]);
+    expect(s).toMatchObject({
+      emitted: 4,
+      onUnsupported: 1,
+      inUntrackable: 0,
+      judgedNegatives: 4,
+      truePositives: 2,
+      falsePositives: 1,
+      falseNegatives: 0,
+      falsePositiveRate: 1 / 4,
+      recall: 1,
+    });
+    expect(s.byRule["r.x"]).toMatchObject({ judgedNegatives: 4, falsePositives: 1 });
+  });
+
+  it("puts stray cues in the rate's denominator too, so it stays within [0, 1]", () => {
+    // all four fall between the labelled reps' windows (REPS ± 300 ms)
+    const e = score(scripted([], {}, [100, 3400, 6500, 9600]));
+    expect(aggregateCues([e])).toMatchObject({ falsePositives: 4, falsePositiveRate: 4 / 6 });
+  });
+
+  it("reports recall as null when no rep warranted a cue (not a vacuous 1)", () => {
+    const l = labels(REPS, {
+      cue_labels: {
+        rules: [{ rule_id: "r.x", method: "by_eye", expected_reps: [], not_expected_reps: [0] }],
+      },
+    });
+    const e = evaluateClip(scripted([2900]), fixture(10), l, 300);
+    expect(aggregateCues([e]).recall).toBeNull();
   });
 });

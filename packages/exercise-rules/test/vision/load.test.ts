@@ -11,6 +11,7 @@ const gate = {
   min_recall: 0.9,
   match_tolerance_ms: 300,
   min_recorded_clips: 0,
+  cues: { max_false_positive_rate: 0.05, min_judged_negatives: 1 },
 };
 const landmarks = {
   format_version: 1,

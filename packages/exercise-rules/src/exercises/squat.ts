@@ -1,7 +1,7 @@
 import type { LandmarkName } from "@fitpilot/exercise-contracts";
 import { assessTracking, type LandmarkFrame } from "../core/confidence";
 import { jointAngle, type Landmark } from "../core/geometry";
-import type { AnalysisResult, FeedbackCue, TrackingReason } from "../core/types";
+import type { AnalysisResult, CueRule, FeedbackCue, TrackingReason } from "../core/types";
 
 export type SquatPhase = "standing" | "descending" | "bottom" | "ascending";
 type Side = "left" | "right";
@@ -23,8 +23,24 @@ type Side = "left" | "right";
  *   a rep interrupted by > maxGapMs of unreliable tracking is abandoned, never guessed.
  * - Count: back to standing after ≥ minRepMs, with the knee at ≤ countMaxKneeAngle at some point
  *   and the measured ankle within maxAnkleDriftToTorso of where the rep started (feet planted).
- * - Rule squat.depth.shallow: min knee angle > shallowDepthKneeAngle at the end of a rep →
- *   "Try sitting a little deeper if it feels comfortable." (squat_depth_shallow_v1).
+ * - Rule squat.depth.shallow (priority 1): min knee angle > shallowDepthKneeAngle on a counted rep
+ *   → "Try sitting a little deeper if it feels comfortable." (squat_depth_shallow_v1).
+ *   Measurements: min_knee_angle_deg. Fixture evidence (v4 cue gate): 0 cues on 53 reps judged
+ *   full depth (lite); there are no shallow reps in the set, so it has never been seen to fire on
+ *   a real clip. The threshold is v1's and stays _uncalibrated_ for cueing.
+ * - Rule squat.torso.forward_lean (priority 2, v4): on a counted rep, the trunk lean at the bottom
+ *   (hip → shoulder line against image vertical, smoothed like the knee, taken on the frame where
+ *   the knee angle is smallest) > maxTrunkLeanDeg → "Try keeping your chest a little more upright
+ *   as you lower." (squat_torso_forward_lean_v1). Measurements: trunk_lean_deg,
+ *   min_knee_angle_deg. Only a *forward* lean counts: the shoulder must be on the same side of the
+ *   hip as the knee (a backward tilt at the bottom of a squat is a landmark error). Withheld when:
+ *   any v3 withhold condition; the rep isn't counted; the knee isn't clearly in front of the hip
+ *   (no forward direction to judge). Assumes an upright camera: a rolled or pitched camera adds
+ *   its tilt to the measured lean, and no landmark here can detect that.
+ *   _Uncalibrated._ 60° is a starting point, not fitted: real side-view squats (lite) measured
+ *   16–51° at the bottom (mannequin 29°, authored), so no fixture rep triggers it, and no clip
+ *   has a by-eye lean judgement (the source videos are gone). Calibrate on recordings with
+ *   annotated lean before trusting it.
  *
  * v3 — calibrated 2026-10-28 on data/evaluation-fixtures/vision/bodyweight_squat: 25 Pexels clips
  * (11 side-view, 13 unsupported) + 2 mannequin clips, lite model, labels from frame sheets.
@@ -38,9 +54,31 @@ type Side = "left" | "right";
  * (the ankle estimate moves as the shins tilt). The angle thresholds are v1's and held up. No
  * held-out set yet: re-check on the next recordings before trusting these as general. v1/v2 are
  * reproducible from git (#36, #39).
+ *
+ * v4 (M3 S2) — adds squat.torso.forward_lean; counting and the depth rule are unchanged
+ * (v3 = this ruleset with `version: 3, maxTrunkLeanDeg: Infinity`, tested).
  */
-export const SQUAT_RULESET = {
-  version: 3,
+export interface SquatRuleset {
+  readonly version: number;
+  readonly minVisibility: number;
+  readonly smoothingTauMs: number;
+  readonly standingKneeAngle: number;
+  readonly bottomKneeAngle: number;
+  readonly directionDeadbandDegPerS: number;
+  readonly minRepMs: number;
+  readonly shallowDepthKneeAngle: number;
+  readonly maxTrunkLeanDeg: number;
+  readonly leanDirectionMinToTorso: number;
+  readonly segmentToTorso: readonly [number, number];
+  readonly maxShoulderToTorso: number;
+  readonly minYawDeg: number;
+  readonly countMaxKneeAngle: number;
+  readonly maxAnkleDriftToTorso: number;
+  readonly maxGapMs: number;
+}
+
+export const SQUAT_RULESET: SquatRuleset = {
+  version: 4,
   minVisibility: 0.6,
   /** EMA time constant; v1's alpha 0.4 at 30 fps ≈ 65 ms */
   smoothingTauMs: 65,
@@ -51,6 +89,16 @@ export const SQUAT_RULESET = {
   directionDeadbandDegPerS: 24,
   minRepMs: 600,
   shallowDepthKneeAngle: 120,
+  /**
+   * forward trunk lean from vertical at the bottom of a rep above this ⇒ forward-lean cue (v4,
+   * _uncalibrated_: see the rule notes above)
+   */
+  maxTrunkLeanDeg: 60,
+  /**
+   * lean is only measured once the knee is this × torso length ahead of the hip, so "forward"
+   * has a direction (v4; standing straight it doesn't)
+   */
+  leanDirectionMinToTorso: 0.1,
   /** plausible thigh and shin length as a multiple of shoulder–hip length (2D, side view) */
   segmentToTorso: [0.45, 1.4] as const,
   /** shoulder width above this × torso length ⇒ facing the camera, not side-on */
@@ -69,9 +117,59 @@ export const SQUAT_RULESET = {
   maxAnkleDriftToTorso: 0.6,
   /** longer unreliable stretches abandon an in-progress rep */
   maxGapMs: 1000,
-} as const;
+};
 
-type Ruleset = typeof SQUAT_RULESET;
+/** The squat's feedback rules (blueprint §8 rule contract); cues are built from these. */
+export const SQUAT_RULES = [
+  {
+    rule_id: "squat.depth.shallow",
+    message_id: "squat_depth_shallow_v1",
+    priority: 1,
+    message: "Try sitting a little deeper if it feels comfortable.",
+    explanation:
+      "At the lowest point of that rep your knees stayed fairly straight, so it was a shallow " +
+      "squat. The camera estimates the angle at your knee, between your thigh and your shin, on " +
+      "the side facing it. Going lower is optional: only go as deep as feels comfortable for you.",
+    measurements: {
+      min_knee_angle_deg: { label: "Smallest knee angle in the rep", unit: "deg" },
+    },
+  },
+  {
+    rule_id: "squat.torso.forward_lean",
+    message_id: "squat_torso_forward_lean_v1",
+    priority: 2,
+    message: "Try keeping your chest a little more upright as you lower.",
+    explanation:
+      "At the bottom of that rep your upper body tipped further forward than this check " +
+      "expects. The camera compares the line from your hip to your shoulder with straight up. " +
+      "Some forward lean is normal in a squat and how much depends on your build, so treat this " +
+      "as a suggestion: lifting your chest a little as you sit down may help, if it feels natural.",
+    measurements: {
+      trunk_lean_deg: { label: "Upper-body lean from vertical at the bottom", unit: "deg" },
+      min_knee_angle_deg: { label: "Smallest knee angle in the rep", unit: "deg" },
+    },
+  },
+] as const satisfies readonly CueRule[];
+
+type SquatRuleId = (typeof SQUAT_RULES)[number]["rule_id"];
+
+function cueFor(
+  ruleId: SquatRuleId,
+  version: number,
+  measurements: Record<string, number>,
+): FeedbackCue {
+  const r: CueRule = SQUAT_RULES.find((rule) => rule.rule_id === ruleId)!;
+  return {
+    rule_id: r.rule_id,
+    ruleset_version: version,
+    message_id: r.message_id,
+    message: r.message,
+    measurements,
+    priority: r.priority,
+  };
+}
+
+type Ruleset = SquatRuleset;
 
 const SIDE_LANDMARKS = {
   left: ["left_shoulder", "left_hip", "left_knee", "left_ankle"],
@@ -85,6 +183,8 @@ interface SideMeasure {
   /** ankle position and torso length, for the feet-planted check */
   ankle: { x: number; y: number };
   torso: number;
+  /** forward trunk lean from vertical, deg (negative = backward); null with no forward direction */
+  lean: number | null;
 }
 
 export class SquatAnalyzer {
@@ -100,6 +200,9 @@ export class SquatAnalyzer {
   /** ankle at the start of the rep and the furthest it has moved since, in torso lengths */
   private repAnkle: { x: number; y: number } | null = null;
   private ankleDrift = 0;
+  /** smoothed trunk lean, and its value on the frame of the rep's smallest knee angle */
+  private lean: number | null = null;
+  private leanAtBottom: number | null = null;
 
   constructor(private readonly cfg: Ruleset = SQUAT_RULESET) {}
 
@@ -121,18 +224,22 @@ export class SquatAnalyzer {
       this.abandonRep(); // we didn't see the middle of it: don't count it
       // and don't smooth or take a velocity across the gap: that would invent a movement
       this.knee = null;
+      this.lean = null;
       this.prevT = null;
     }
     this.lastReliableT = tMs;
 
     const dt = this.prevT === null ? 0 : Math.max(1, tMs - this.prevT);
+    const smooth = (prior: number | null, sample: number) =>
+      prior === null || dt === 0
+        ? sample
+        : prior + (1 - Math.exp(-dt / this.cfg.smoothingTauMs)) * (sample - prior);
     const prev = this.knee;
-    this.knee =
-      prev === null || dt === 0
-        ? m.knee
-        : prev + (1 - Math.exp(-dt / this.cfg.smoothingTauMs)) * (m.knee - prev);
+    this.knee = smooth(prev, m.knee);
+    this.lean = m.lean === null ? null : smooth(this.lean, m.lean);
     this.prevT = tMs;
     const knee = this.knee;
+    const lean = this.lean;
     const velocity = prev === null || dt === 0 ? 0 : ((knee - prev) / dt) * 1000;
     const down = velocity < -this.cfg.directionDeadbandDegPerS;
     const up = velocity > this.cfg.directionDeadbandDegPerS;
@@ -149,18 +256,18 @@ export class SquatAnalyzer {
         if (knee < this.cfg.standingKneeAngle && down) {
           this.phase = "descending";
           this.repStartedAt = tMs;
-          this.minKneeThisRep = knee;
+          this.trackBottom(knee, lean);
           this.repAnkle = m.ankle;
           this.ankleDrift = 0;
         }
         break;
       case "descending":
-        this.minKneeThisRep = Math.min(this.minKneeThisRep, knee);
+        this.trackBottom(knee, lean);
         if (knee <= this.cfg.bottomKneeAngle) this.phase = "bottom";
         else if (up) this.phase = "ascending"; // turned early
         break;
       case "bottom":
-        this.minKneeThisRep = Math.min(this.minKneeThisRep, knee);
+        this.trackBottom(knee, lean);
         if (up) this.phase = "ascending";
         break;
       case "ascending":
@@ -175,16 +282,7 @@ export class SquatAnalyzer {
           ) {
             this.reps += 1;
             repCompleted = true;
-            if (this.minKneeThisRep > this.cfg.shallowDepthKneeAngle) {
-              cues.push({
-                rule_id: "squat.depth.shallow",
-                ruleset_version: this.cfg.version,
-                message_id: "squat_depth_shallow_v1",
-                message: "Try sitting a little deeper if it feels comfortable.",
-                measurements: { min_knee_angle_deg: round(this.minKneeThisRep) },
-                priority: 1,
-              });
-            }
+            cues.push(...this.evaluateRep());
           }
           this.abandonRep();
         } else if (down) {
@@ -198,9 +296,40 @@ export class SquatAnalyzer {
       reps: this.reps,
       repCompleted,
       tracking: { reliable: true, confidence: m.confidence },
-      features: { knee_angle_deg: round(knee), side: m.side === "left" ? 0 : 1 },
+      features: {
+        knee_angle_deg: round(knee),
+        side: m.side === "left" ? 0 : 1,
+        ...(lean === null ? {} : { trunk_lean_deg: round(lean) }),
+      },
       cues,
     };
+  }
+
+  /** The bottom of the rep is the frame with the smallest knee angle; lean is judged there. */
+  private trackBottom(knee: number, lean: number | null) {
+    if (knee < this.minKneeThisRep) {
+      this.minKneeThisRep = knee;
+      this.leanAtBottom = lean;
+    }
+  }
+
+  /** Stage 4: the versioned rules, on a counted rep only. */
+  private evaluateRep(): FeedbackCue[] {
+    const v = this.cfg.version;
+    const minKnee = round(this.minKneeThisRep);
+    const cues: FeedbackCue[] = [];
+    if (this.minKneeThisRep > this.cfg.shallowDepthKneeAngle) {
+      cues.push(cueFor("squat.depth.shallow", v, { min_knee_angle_deg: minKnee }));
+    }
+    if (this.leanAtBottom !== null && this.leanAtBottom > this.cfg.maxTrunkLeanDeg) {
+      cues.push(
+        cueFor("squat.torso.forward_lean", v, {
+          trunk_lean_deg: round(this.leanAtBottom),
+          min_knee_angle_deg: minKnee,
+        }),
+      );
+    }
+    return cues;
   }
 
   reset(): void {
@@ -215,6 +344,8 @@ export class SquatAnalyzer {
     this.repAnkle = null;
     this.ankleDrift = 0;
     this.outOfFrame = false;
+    this.lean = null;
+    this.leanAtBottom = null;
   }
 
   /** Keeps the current side while it stays usable, so the angle doesn't hop between legs. */
@@ -229,6 +360,7 @@ export class SquatAnalyzer {
     const chosen = keep ?? candidates.reduce((a, b) => (b.confidence > a.confidence ? b : a));
     if (chosen.side !== this.side && this.side !== null) {
       this.knee = null; // a different leg: restart smoothing, keep the phase
+      this.lean = null;
       this.repAnkle = this.repAnkle && chosen.ankle; // and measure drift from the new ankle
     }
     this.side = chosen.side;
@@ -247,13 +379,29 @@ export class SquatAnalyzer {
     if (!this.plausible(shoulder!, hip!, knee!, ankle!)) return null;
     const angle = jointAngle(hip!, knee!, ankle!);
     if (angle === null) return null;
+    const torso = dist(shoulder!, hip!);
     return {
       side,
       knee: angle,
       confidence: quality.confidence,
       ankle: { x: ankle!.x, y: ankle!.y },
-      torso: dist(shoulder!, hip!),
+      torso,
+      lean: this.trunkLean(shoulder!, hip!, knee!, torso),
     };
+  }
+
+  /**
+   * Trunk lean from image vertical (deg), signed: + when the shoulder is on the knee's side of
+   * the hip (forward, as in a squat), − when behind it. y grows downwards and plausibility has
+   * already put the shoulder above the hip. Null when the knee isn't clearly ahead of the hip
+   * (standing straight): there is no forward direction to measure against.
+   */
+  private trunkLean(shoulder: Landmark, hip: Landmark, knee: Landmark, torso: number) {
+    const ahead = knee.x - hip.x;
+    if (Math.abs(ahead) < this.cfg.leanDirectionMinToTorso * torso) return null;
+    const dx = shoulder.x - hip.x;
+    const deg = (Math.atan2(Math.abs(dx), hip.y - shoulder.y) * 180) / Math.PI;
+    return Math.sign(dx) === Math.sign(ahead) ? deg : -deg;
   }
 
   private plausible(shoulder: Landmark, hip: Landmark, knee: Landmark, ankle: Landmark) {
@@ -303,6 +451,7 @@ export class SquatAnalyzer {
     this.ankleDrift = 0;
     this.phase = "standing";
     this.minKneeThisRep = Infinity;
+    this.leanAtBottom = null;
     this.repStartedAt = null;
   }
 

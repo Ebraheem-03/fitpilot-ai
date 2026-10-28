@@ -51,7 +51,7 @@
     "rule_based_feedback"
   ],
   "required_landmarks": ["left_hip", "left_knee", "left_ankle", "left_shoulder"],
-  "ruleset_version": 3,
+  "ruleset_version": 4,
   "phases": ["standing", "descending", "bottom", "ascending"],
   "instructions": [
     "Stand with feet roughly shoulder-width apart, toes slightly turned out.",

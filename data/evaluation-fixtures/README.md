@@ -57,6 +57,28 @@ vision/<exercise_id>/<clip_id>.labels.json       # human annotation
 - Matching: a counted rep is a true positive if it completes within `[start_ms − tol, end_ms + tol]` of an unmatched label (`gate.match_tolerance_ms`).
 - `annotated_by` holds initials or a role, never a full name.
 
+#### Cue annotations (`cue_labels`, M3 S2)
+
+Optional, and only on `supported` clips. Per feedback rule, the indices of the reps on which a person expects the cue and the reps on which the cue would be wrong. Reps in neither list are unjudged for that rule.
+
+```json
+"cue_labels": {
+  "rules": [
+    {
+      "rule_id": "squat.depth.shallow",
+      "method": "from_rep_labels",
+      "expected_reps": [1],
+      "not_expected_reps": [0, 2],
+      "notes": "…"
+    }
+  ]
+}
+```
+
+- `method` says where the judgement came from. `by_eye` means a person watched the video or frame sheets. `from_rep_labels` means it was derived mechanically from a by-eye rep label (for example `full_depth`). `synthetic_ground_truth` means the generated mannequin, whose motion is known by construction.
+- A cue is attributed to the labelled rep whose tolerance window contains it and whose end is nearest. A cue of an annotated rule outside every labelled rep, or a second one on the same rep, is a stray and always counts as wrong.
+- The cue gate (`gate.cues`) scores the analyzer's raw cues, before cooldown could hide any. The false-positive rate is false cues ÷ (`not_expected` reps + stray cues). It must stay at or below `max_false_positive_rate`, over at least `min_judged_negatives` judged reps, and every declared rule must be judged on at least one rep. Two checks always apply, with or without annotations: **no cue inside `untrackable_ranges_ms`, and no cue on an unsupported clip**. A meta-test confirms that a ruleset which cues every rep fails the gate.
+
 Coverage goal per exercise: varied camera distance and angle, lighting, clothing and body proportions. Record only people who consented. Only the derived JSON is committed. Landmarks carry no image, but they are still body data, so record yourself or people who agreed to have their movement published.
 
 ### Recording protocol (bodyweight squat, M2 S3)
@@ -80,6 +102,8 @@ Record yourself, or people who agreed to have their movement data published. Use
 | 11–12 | side   | either          | 2.5 m    | normal                  | any      | a second person if available (different body proportions)                                                                   |
 
 Then, for each clip: run `make dev`, open `/dev/capture`, pick the file, set the clip id (`squat_side_001`, …), and click **Extract landmarks**. Set the camera, facing, lighting, clothing and distance fields, and set "supported" to off for row 10. Scrub through the video and mark each rep's start, bottom and end, plus any untrackable span (row 8). Download both JSON files into `vision/bodyweight_squat/`. Repeat with the model set to "full" (suffix `_full`) so S4 can compare the two models.
+
+The cue rules most need positive examples: row 7 (shallow reps), and a side-view set with about half the reps leaning the chest well forward. `/dev/capture` doesn't write `cue_labels` yet. While watching the video, add them to `labels.json` by hand with `"method": "by_eye"`, and copy them into the `_full` labels.
 
 ### Pexels clips (M2 S3)
 
@@ -119,6 +143,13 @@ The recorded fixtures come from 25 stock videos on [Pexels](https://www.pexels.c
 - A hold that never stands back up is not a rep.
 - `end_ms` is the moment the person is upright again.
 - Front-on, three-quarter (≈45°), and head- or feet-cut-off clips are `supported: false`. The catalogue supports a whole-body side view only, so any rep counted on them is a false count.
+
+**How the cue labels were made (M3 S2).** The source videos had been deleted, so no new by-eye judgement was possible, and none of these labels came from landmark traces or analyzer output:
+
+- `squat.depth.shallow` on the Pexels clips is `from_rep_labels`. It is derived from the by-eye `full_depth` field above, so a full-depth rep is `not_expected`. All 48 labelled reps are full depth, so the set has **no positive (shallow) example**.
+- `squat.torso.forward_lean` on the Pexels clips is **not judged on any rep**. The entry exists with empty lists, so only stray cues (outside every labelled rep) are scored.
+- On the mannequin side clips, both rules are `synthetic_ground_truth`, and every rep is `not_expected`. Each rep reaches the authored full depth, and the authored trunk hinge is pelvis 18° + spine 10° + chest 8° (`packages/avatar/src/clips/squat.ts`). The lean measures about 29°.
+- Still missing: shallow reps and reps with a strong forward lean judged by eye. Until those exist, the gate can show that the rules stay quiet when they should, but it can't show that they fire when they should.
 
 **Coverage and gaps:**
 
