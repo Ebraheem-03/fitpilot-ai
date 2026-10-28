@@ -1,7 +1,7 @@
 # Progress
 
 Current milestone: **M2 — Live vision engine** (planned 2026-10-28). M1 done 2026-10-28.
-Next up: S9 reviews of S5–S7. **Blocked on you:** recording squat clips (S3), which S4 calibration needs, and a phone run of `/dev/pose-bench` (ADR-0010).
+Next up: **blocked on you**: (1) record the squat clips in `data/evaluation-fixtures/README.md` → S3, then S4 calibration closes M2's last box; (2) `make bench-phone` on a mid-range phone (ADR-0010 open item). The exit condition is already proven by `live-coaching.spec.ts` EXIT on main.
 
 > Claude: read this file at the start of a session (the SessionStart hook prints the top of it).
 > Update it with `/handoff` at the end of a session. Keep it short — history lives in git.
