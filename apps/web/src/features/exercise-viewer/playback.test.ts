@@ -115,6 +115,15 @@ describe("playbackReducer (FR-03 controls)", () => {
   });
 });
 
+describe("retry", () => {
+  it("returns a failed viewer to loading, and does nothing otherwise", () => {
+    const failed = run([{ type: "failed", reason: "missing" }]);
+    expect(run([{ type: "retry" }], failed)).toEqual(initialPlayback(4));
+    const playing = run([{ type: "play" }], ready());
+    expect(run([{ type: "retry" }], playing)).toBe(playing);
+  });
+});
+
 describe("phaseAt", () => {
   it.each([
     [0, 0, "standing"],
