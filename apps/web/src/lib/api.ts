@@ -1,12 +1,28 @@
 import "server-only";
-import { ExerciseContract } from "@fitpilot/exercise-contracts";
+import { ExerciseContract, SessionSummary } from "@fitpilot/exercise-contracts";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getAccessToken } from "@/lib/supabase/server";
 
-import type { Me, Profile, ProfileInput } from "@/lib/api-types";
+import type {
+  CompleteSessionInput,
+  EventIngestResult,
+  Me,
+  Profile,
+  ProfileInput,
+  StartSessionInput,
+  WorkoutSession,
+  WorkoutSessionPage,
+} from "@/lib/api-types";
 
-export type { Me, Profile, ProfileInput, Role } from "@/lib/api-types";
+export type {
+  Me,
+  Profile,
+  ProfileInput,
+  Role,
+  WorkoutSession,
+  WorkoutSessionPage,
+} from "@/lib/api-types";
 
 export class ApiError extends Error {
   constructor(
@@ -82,3 +98,79 @@ export const getExercise = cache(async (id: string): Promise<ExerciseContract | 
   if (res.status === 404) return null;
   return ExerciseContract.parse(await json<unknown>(res));
 });
+
+// --- Tracking consent + workout sessions (FR-07, ADR-0011) ------------------------------------
+
+export async function grantTrackingConsent(version: number): Promise<Profile> {
+  return json<Profile>(
+    await apiFetch("/profiles/me/tracking-consent", {
+      method: "PUT",
+      body: JSON.stringify({ version }),
+    }),
+  );
+}
+
+export async function withdrawTrackingConsent(): Promise<Profile> {
+  return json<Profile>(await apiFetch("/profiles/me/tracking-consent", { method: "DELETE" }));
+}
+
+export async function startWorkoutSession(
+  input: StartSessionInput,
+  idempotencyKey: string,
+): Promise<WorkoutSession> {
+  return json<WorkoutSession>(
+    await apiFetch("/workout-sessions", {
+      method: "POST",
+      body: JSON.stringify(input),
+      headers: { "Idempotency-Key": idempotencyKey },
+    }),
+  );
+}
+
+/** Throws ApiError; the caller maps `detail.code` (409 session_completed, 403 consent, 422 …). */
+export async function postSessionEvents(
+  sessionId: string,
+  events: unknown[],
+): Promise<EventIngestResult> {
+  return json<EventIngestResult>(
+    await apiFetch(`/workout-sessions/${sessionId}/events`, {
+      method: "POST",
+      body: JSON.stringify({ events }),
+    }),
+  );
+}
+
+export async function completeWorkoutSession(
+  sessionId: string,
+  input: CompleteSessionInput,
+  idempotencyKey: string,
+): Promise<SessionSummary> {
+  return SessionSummary.parse(
+    await json<unknown>(
+      await apiFetch(`/workout-sessions/${sessionId}/complete`, {
+        method: "POST",
+        body: JSON.stringify(input),
+        headers: { "Idempotency-Key": idempotencyKey },
+      }),
+    ),
+  );
+}
+
+export async function getWorkoutSession(sessionId: string): Promise<WorkoutSession | null> {
+  const res = await apiFetch(`/workout-sessions/${sessionId}`);
+  if (res.status === 404) return null;
+  return json<WorkoutSession>(res);
+}
+
+export async function listWorkoutSessions(limit = 20, offset = 0): Promise<WorkoutSessionPage> {
+  return json<WorkoutSessionPage>(
+    await apiFetch(`/workout-sessions?limit=${limit}&offset=${offset}`),
+  );
+}
+
+export async function deleteWorkoutSession(sessionId: string): Promise<boolean> {
+  const res = await apiFetch(`/workout-sessions/${sessionId}`, { method: "DELETE" });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  return true;
+}

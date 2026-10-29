@@ -3,6 +3,9 @@ import type { LandmarkName, SessionEvent } from "@fitpilot/exercise-contracts";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { phaseLabel } from "../exercise-viewer/labels";
+import { TrackingConsentStep } from "../workouts/TrackingConsentStep";
+import { getOutbox } from "../workouts/outbox/browser";
+import { createEventSink } from "../workouts/outbox/sink";
 import { analyzerFor } from "./analyzers";
 import { CueCard } from "./CueCard";
 import { browserDeps } from "./engine/browser";
@@ -39,6 +42,8 @@ export interface LiveCoachProps {
    * flushed after the camera stops; ADR-0011). Nothing in this component sends anything.
    */
   sink?: EventSink;
+  /** Whether the member has already agreed to save tracking data (ADR-0011 §4). */
+  trackingConsent?: boolean;
   /** reps prescribed for the set: shows set progress */
   targetReps?: number;
   /** index of the first set this camera session records (later sets count on from it) */
@@ -78,6 +83,7 @@ export function LiveCoach({
   exercise,
   sessionId,
   sink,
+  trackingConsent = false,
   targetReps,
   setIndex = 0,
   onSetComplete,
@@ -98,6 +104,14 @@ export function LiveCoach({
   });
   // Keyed by value: a new array identity for the same landmarks (router refresh, HMR) must not
   // dispose the engine and switch the camera off mid-session.
+  const [consent, setConsent] = useState<"granted" | "declined" | "unknown">(
+    trackingConsent ? "granted" : "unknown",
+  );
+  const consentRef = useRef(consent);
+  useEffect(() => {
+    consentRef.current = consent;
+  }, [consent]);
+  const consentPending = sessionId !== undefined && consent === "unknown";
   const requiredKey = exercise.required_landmarks.join(",");
 
   useEffect(() => {
@@ -107,12 +121,25 @@ export function LiveCoach({
     const recorder = new SessionRecorder({
       exerciseId: exercise.id,
       sessionId,
-      sink: (events) => sinkRef.current?.(events),
+      sink: (events) => {
+        sinkRef.current?.(events);
+        // With a session, events wait in the on-device outbox (ADR-0011): enqueue only; the
+        // outbox is held while the camera runs and flushes after it stops. Without consent the
+        // tracked events are dropped here.
+        if (sessionId !== undefined) outboxSink(events);
+      },
       firstSetIndex: setIndex,
+    });
+    const outboxSink = createEventSink({
+      outbox: getOutbox(),
+      hasConsent: () => consentRef.current === "granted",
     });
     const e = new LiveEngine(browserDeps(video, create), video, required, { recorder });
     setEngine(e);
-    return () => e.dispose(); // leaving the page always turns the camera off
+    return () => {
+      e.dispose(); // leaving the page always turns the camera off
+      delete window.__fitpilotLiveEvents;
+    };
   }, [exercise.id, requiredKey, sessionId, setIndex]);
 
   const snap = useSyncExternalStore(
@@ -134,7 +161,10 @@ export function LiveCoach({
     if (reportedSet.current === last.idempotency_key) return;
     reportedSet.current = last.idempotency_key;
     onSetCompleteRef.current?.(summary, events);
-  }, [summary, events]);
+    // The set is over and the camera is off (stop, or it failed): send what it recorded. The
+    // outbox is still held for a render at most; releasing it flushes too, and repeats are no-ops.
+    if (sessionId !== undefined) void getOutbox().flush(sessionId);
+  }, [summary, events, sessionId]);
 
   // e2e only (tests/e2e/live-cues.spec.ts): the current set's practice-mode events, readable by
   // the test in the page. Never in a production build, never for a real session.
@@ -146,6 +176,17 @@ export function LiveCoach({
   const acknowledge = useCallback(() => engine?.acknowledgeCue(), [engine]);
   const dismiss = useCallback(() => engine?.dismissCue(), [engine]);
   const now = useCallback(() => engine?.now() ?? performance.now(), [engine]);
+
+  // Nothing is sent while the camera is on; when it stops (or the page is left) the outbox flushes
+  // the set (ADR-0011 §2).
+  useEffect(() => {
+    if (!sessionId) return;
+    getOutbox().holdWhile(cameraOn);
+  }, [sessionId, cameraOn]);
+  useEffect(() => {
+    if (!sessionId) return;
+    return () => getOutbox().holdWhile(false);
+  }, [sessionId]);
 
   // The control the member used disappears when the panel changes: move focus to where the
   // next action is, but never steal it from somewhere they've moved to themselves.
@@ -212,8 +253,9 @@ export function LiveCoach({
           <h3 className="font-semibold">Before you start</h3>
           <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
             <li>
-              Your camera is processed <strong>on this device only</strong>. No video is recorded or
-              uploaded.
+              Your video and body points <strong>never leave this device</strong>. Workout data
+              derived from them (rep counts and cue measurements) is saved only if you agree, and
+              only after the camera stops.
             </li>
             <li>Stand side-on to the camera, 2–3 m away, with your whole body in the picture.</li>
             <li>Good, even light in front of you helps tracking.</li>
@@ -226,11 +268,14 @@ export function LiveCoach({
               tracking is reliable.
             </li>
           </ul>
+          {consentPending && (
+            <TrackingConsentStep onDecision={(save) => setConsent(save ? "granted" : "declined")} />
+          )}
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               className={primary}
-              disabled={!engine || session.status === "requesting"}
+              disabled={!engine || session.status === "requesting" || consentPending}
               onClick={() => void engine?.start()}
             >
               {session.status === "requesting" ? "Waiting for permission…" : "Start camera"}
@@ -275,6 +320,13 @@ export function LiveCoach({
             {count(summary?.reps ?? reps)} counted.
           </p>
           {summary && <SetSummaryView summary={summary} targetReps={targetReps} />}
+          {sessionId && (
+            <p className="text-sm text-muted" data-testid="save-state">
+              {consent === "granted"
+                ? "Your set is being saved to your account."
+                : "Not saved: you chose to track only on this device."}
+            </p>
+          )}
           <div>
             <button type="button" className={primary} onClick={() => void engine?.start()}>
               Start again

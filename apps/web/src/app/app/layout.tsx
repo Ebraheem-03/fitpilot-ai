@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { SignOutButton } from "@/features/auth/SignOutButton";
+import { OutboxBoot } from "@/features/workouts/outbox/OutboxBoot";
 import { AppNav } from "@/features/shell/AppNav";
 import { getMe } from "@/lib/api";
 
@@ -33,6 +34,7 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
           <SignOutButton />
         </div>
       </header>
+      <OutboxBoot />
       <main id="content" tabIndex={-1} className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
         {children}
       </main>

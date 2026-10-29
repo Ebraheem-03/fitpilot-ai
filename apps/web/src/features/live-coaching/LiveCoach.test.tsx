@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { feedFrameAt, type FeedPlan, SHALLOW_MOTION } from "./bench/feed-timeline";
 import type { EngineDeps } from "./engine/engine";
 import { FixtureReplayPoseSource } from "./engine/testing/fixture-source";
+import { Outbox } from "../workouts/outbox/outbox";
+import { MemoryStore } from "../workouts/outbox/store";
 import { LiveCoach } from "./LiveCoach";
 
 const FIXTURE = join(
@@ -43,6 +45,19 @@ vi.mock("./engine/browser", async () => {
   };
 });
 
+// A real outbox over an in-memory store; only its network edge (the send) is faked, and it
+// records whether the camera was running at the moment of each send.
+const outbox = vi.hoisted(() => ({
+  holds: [] as boolean[],
+  sends: [] as { types: string[]; cameraRunning: boolean }[],
+  instance: null as null | import("../workouts/outbox/outbox").Outbox,
+}));
+vi.mock("../workouts/outbox/browser", () => ({ getOutbox: () => outbox.instance! }));
+vi.mock("../workouts/actions", () => ({
+  setTrackingConsent: vi.fn(async () => ({ ok: true, data: {} })),
+  sendEvents: vi.fn(),
+}));
+
 const exercise = {
   id: "bodyweight_squat",
   name: "Bodyweight squat",
@@ -62,6 +77,32 @@ async function advance(ms: number) {
 }
 
 const coach = () => screen.getByTestId("live-coach");
+
+beforeEach(() => {
+  outbox.holds = [];
+  // Per-test array captured by this outbox: a flush from the previous test's unmount must not
+  // land in this test's record.
+  const sends: typeof outbox.sends = (outbox.sends = []);
+  const real = new Outbox({
+    store: new MemoryStore(),
+    send: async (_sessionId, events) => {
+      const state = document
+        .querySelector("[data-testid=live-coach]")
+        ?.getAttribute("data-session");
+      sends.push({
+        types: events.map((e) => e.type),
+        cameraRunning: state === "running" || state === "paused" || state === "loading",
+      });
+      return { ok: true };
+    },
+  });
+  const hold = real.holdWhile.bind(real);
+  real.holdWhile = (v) => {
+    outbox.holds.push(v);
+    hold(v);
+  };
+  outbox.instance = real;
+});
 
 describe("LiveCoach (FR-04 UI)", () => {
   beforeEach(() => {
@@ -85,9 +126,57 @@ describe("LiveCoach (FR-04 UI)", () => {
 
   it("explains on-device processing before asking for the camera, and offers a non-camera path", () => {
     render(<LiveCoach exercise={exercise} />);
-    expect(screen.getByText(/processed/).textContent).toMatch(/on this device only/);
+    expect(screen.getByText(/never leave this device/).closest("li")!.textContent).toMatch(
+      /only after\s+the camera stops/,
+    );
     expect(screen.getByRole("link", { name: /3D demonstration/ })).toBeTruthy();
     expect(coach().dataset.session).toBe("idle");
+  });
+
+  it("practice mode (no session) asks for no consent and holds nothing", () => {
+    render(<LiveCoach exercise={exercise} />);
+    expect(screen.queryByTestId("tracking-consent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start camera" })).toHaveProperty("disabled", false);
+    expect(outbox.holds).toEqual([]);
+  });
+
+  it("asks for consent before a session's first tracked set, in plain words, and blocks the camera until answered", async () => {
+    render(<LiveCoach exercise={exercise} sessionId="s-1" />);
+    expect(screen.getByTestId("tracking-consent").textContent).toContain(
+      "We'll save your rep counts, rep timing, tracking quality and the measurements behind each cue to your account — never video or body points.",
+    );
+    expect(screen.getByRole("button", { name: "Start camera" })).toHaveProperty("disabled", true);
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: /Don't save — track only on this device/ }),
+      ),
+    );
+    expect(screen.queryByTestId("tracking-consent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start camera" })).toHaveProperty("disabled", false);
+  });
+
+  it("records consent through the server action when the member agrees", async () => {
+    const { setTrackingConsent } = await import("../workouts/actions");
+    render(<LiveCoach exercise={exercise} sessionId="s-1" />);
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Save my tracking data" })),
+    );
+    expect(setTrackingConsent).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("tracking-consent")).toBeNull();
+  });
+
+  it("does not ask again once consent is on record", () => {
+    render(<LiveCoach exercise={exercise} sessionId="s-1" trackingConsent />);
+    expect(screen.queryByTestId("tracking-consent")).toBeNull();
+  });
+
+  it("holds the outbox while the camera is on and releases it when the camera stops", async () => {
+    render(<LiveCoach exercise={exercise} sessionId="s-1" trackingConsent />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
+    expect(outbox.holds.at(-1)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
+    expect(outbox.holds.at(-1)).toBe(false);
+    expect(screen.getByTestId("save-state").textContent).toMatch(/being saved/);
   });
 
   it("starts, tracks and counts reps, with the count announced politely", async () => {
@@ -330,7 +419,15 @@ describe("LiveCoach cues + post-set summary (FR-06)", () => {
 
     delete window.__fitpilotLiveEvents;
     const sessionId = "6f1c1f0e-7a52-4c47-9a39-2b7d0e6f3a11";
-    render(<LiveCoach exercise={exercise} sessionId={sessionId} sink={sink} setIndex={2} />);
+    render(
+      <LiveCoach
+        exercise={exercise}
+        sessionId={sessionId}
+        sink={sink}
+        setIndex={2}
+        trackingConsent
+      />,
+    );
     await start();
     await advance(FIRST_CUE_MS);
     fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
@@ -339,5 +436,61 @@ describe("LiveCoach cues + post-set summary (FR-06)", () => {
     expect(sent.every((e) => e.session_id === sessionId)).toBe(true);
     expect(sent.at(-1)).toMatchObject({ set_index: 2, reps: 1 });
     expect(window.__fitpilotLiveEvents).toBeUndefined(); // the e2e hook is practice-only
+  });
+
+  describe("session data leaves the device only after the set stops (ADR-0011)", () => {
+    const sessionId = "6f1c1f0e-7a52-4c47-9a39-2b7d0e6f3a11";
+
+    it("with consent: nothing is sent while the camera runs; the set is sent once it stops", async () => {
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} trackingConsent />);
+      await start();
+      await advance(FIRST_CUE_MS);
+      expect(coach().dataset.session).toBe("running");
+      await vi.waitFor(async () => expect(await outbox.instance!.pendingCount(sessionId)).toBe(2));
+      expect(outbox.sends).toEqual([]); // queued on the device, no network call yet
+
+      fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
+      await vi.waitFor(() => expect(outbox.sends).toHaveLength(1));
+      expect(outbox.sends[0]).toEqual({
+        types: ["rep_completed", "feedback_shown", "set_completed"],
+        cameraRunning: false,
+      });
+      expect(await outbox.instance!.pendingCount(sessionId)).toBe(0);
+    });
+
+    it("without consent: tracking works but no tracked event is stored or sent", async () => {
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} />);
+      fireEvent.click(screen.getByRole("button", { name: /Don't save/ }));
+      await start();
+      await advance(FIRST_CUE_MS);
+      expect(screen.getByTestId("rep-count").textContent).toBe("1");
+      fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
+      await act(async () => {
+        await outbox.instance!.flush();
+      });
+      expect(await outbox.instance!.pendingCount()).toBe(0);
+      expect(outbox.sends).toEqual([]);
+    });
+
+    it("practice mode stores and sends nothing", async () => {
+      render(<LiveCoach exercise={exercise} />);
+      await start();
+      await advance(FIRST_CUE_MS);
+      fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
+      await act(async () => {
+        await outbox.instance!.flush();
+      });
+      expect(await outbox.instance!.pendingCount()).toBe(0);
+      expect(outbox.sends).toEqual([]);
+    });
+
+    it("clears the e2e events hook when the page is left", async () => {
+      const { unmount } = render(<LiveCoach exercise={exercise} />);
+      await start();
+      await advance(FIRST_CUE_MS);
+      expect(window.__fitpilotLiveEvents).toBeDefined();
+      unmount();
+      expect(window.__fitpilotLiveEvents).toBeUndefined();
+    });
   });
 });
