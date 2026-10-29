@@ -31,3 +31,16 @@ export async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 }
+
+/** Fill in the onboarding form with a profile the fake planner can build a plan for. */
+export async function onboard(page: Page, opts: { days?: string; minutes?: string } = {}) {
+  await page.goto("/app/onboarding");
+  await field(page, "Main goal").selectOption("strength");
+  await page.getByRole("radio", { name: "Intermediate" }).check();
+  await field(page, "Days per week").fill(opts.days ?? "3");
+  await field(page, "Minutes per session").fill(opts.minutes ?? "45");
+  await page.getByRole("checkbox", { name: "Dumbbells" }).check();
+  await page.getByRole("checkbox", { name: "Bench" }).check();
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page).toHaveURL(/\/app\/profile$/);
+}

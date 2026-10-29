@@ -11,7 +11,7 @@ export function AppNav({ role }: { role: Role }) {
     <nav aria-label="Main">
       <ul className="flex flex-wrap gap-1">
         {navFor(role).map(({ href, label }) => {
-          const current = pathname === href;
+          const current = pathname === href || (href !== "/app" && pathname.startsWith(`${href}/`));
           return (
             <li key={href}>
               <Link

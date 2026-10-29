@@ -31,7 +31,7 @@ function apiBaseUrl(): string {
  * deleted user), go to /session-expired rather than /sign-in: the proxy would bounce a
  * still-signed-in user from /sign-in back to /app, looping forever.
  */
-async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = await getAccessToken();
   if (!token) redirect("/session-expired");
   const res = await fetch(`${apiBaseUrl()}/api/v1${path}`, {
@@ -47,7 +47,7 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
   return res;
 }
 
-async function json<T>(res: Response): Promise<T> {
+export async function json<T>(res: Response): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
   return (await res.json()) as T;
 }
