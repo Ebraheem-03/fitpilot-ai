@@ -126,7 +126,7 @@ def test_summary_matches_the_events(api: TestClient) -> None:
     assert squat["cues"] == [
         {
             "rule_id": RULE,
-            "ruleset_version": 3,
+            "ruleset_version": 4,
             "message_id": "go_deeper",
             "shown_at": at(12).replace("+00:00", "Z"),
             "measurements": {"min_knee_angle_deg": 112.5},

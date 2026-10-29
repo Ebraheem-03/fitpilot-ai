@@ -14,6 +14,11 @@ from alembic.config import Config
 from sqlalchemy import Connection, Engine, create_engine, make_url, text
 from sqlalchemy.orm import Session
 
+# CI and tests never call a live model (ADR-0006 §5). Env beats the .env files Settings reads, so a
+# developer's real GROQ_API_KEY in the root .env can't be picked up by any test.
+os.environ["LLM_PROVIDER"] = "fake"
+os.environ["GROQ_API_KEY"] = ""
+
 API_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEST_DB = "postgresql+psycopg://fitpilot:fitpilot@localhost:5432/fitpilot_test"
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "db"}
