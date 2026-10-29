@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "days": {
+      "minItems": 1,
+      "maxItems": 7,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "day_of_week": {
+            "type": "string",
+            "enum": [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday"
+            ]
+          },
+          "focus": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "exercises": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "exercise_id": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z0-9_]+$"
+                },
+                "sets": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 6
+                },
+                "reps": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 30
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "duration_s": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 10,
+                      "maximum": 180
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "rest_s": {
+                  "type": "integer",
+                  "minimum": 15,
+                  "maximum": 240
+                },
+                "progression": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "exercise_id",
+                "sets",
+                "reps",
+                "duration_s",
+                "rest_s",
+                "progression"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "day_of_week",
+          "focus",
+          "exercises"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    }
+  },
+  "required": [
+    "days",
+    "rationale"
+  ],
+  "additionalProperties": false
+}

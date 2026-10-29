@@ -33,7 +33,7 @@ def _feedback() -> dict[str, Any]:
         **_base(),
         "type": "feedback_shown",
         "rule_id": "squat.depth.shallow",
-        "ruleset_version": 3,
+        "ruleset_version": 4,
         "message_id": "squat_depth_shallow_v1",
         "measurements": {"min_knee_angle_deg": 112},
         "tracking_confidence": 0.9,
@@ -205,7 +205,7 @@ def _summary() -> dict[str, Any]:
                 "cues": [
                     {
                         "rule_id": "squat.depth.shallow",
-                        "ruleset_version": 3,
+                        "ruleset_version": 4,
                         "message_id": "squat_depth_shallow_v1",
                         "shown_at": "2026-10-29T10:05:00Z",
                         "measurements": {"min_knee_angle_deg": 112},
@@ -271,6 +271,16 @@ def test_summary_cues_must_name_a_rule_id() -> None:
 def test_declared_rules_are_loaded_from_the_generated_file() -> None:
     assert CUE_RULES["squat.depth.shallow"]["measurements"] == ["min_knee_angle_deg"]
     assert (
-        cue_rule_violation("squat.depth.shallow", "bodyweight_squat", ["min_knee_angle_deg"])
+        cue_rule_violation("squat.depth.shallow", "bodyweight_squat", ["min_knee_angle_deg"], 4)
         is None
     )
+
+
+def test_feedback_shown_ruleset_version_must_match_the_rule() -> None:
+    with pytest.raises(ValidationError, match="belongs to ruleset_version 4, not 3"):
+        EVENT.validate_python({**_feedback(), "ruleset_version": 3})
+
+
+def test_omitted_optional_fields_stay_none() -> None:
+    skipped = EVENT.validate_python({**_base(), "type": "exercise_skipped"})
+    assert skipped.reason is None

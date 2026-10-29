@@ -158,7 +158,12 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
             expect(explainCue(cue.message_id)).toBeDefined();
             // and the session-event contract would accept it as a feedback_shown (ADR-0011)
             expect(
-              cueRuleViolation(cue.rule_id, exerciseId, Object.keys(cue.measurements)),
+              cueRuleViolation(
+                cue.rule_id,
+                exerciseId,
+                Object.keys(cue.measurements),
+                cue.ruleset_version,
+              ),
             ).toBeNull();
           }
         }
