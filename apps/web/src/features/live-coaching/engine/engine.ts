@@ -1,6 +1,13 @@
-import type { LandmarkName } from "@fitpilot/exercise-contracts";
-import type { AnalysisResult, LandmarkFrame } from "@fitpilot/exercise-rules";
+import type { LandmarkName, SessionEvent } from "@fitpilot/exercise-contracts";
+import {
+  type ActiveCue,
+  type AnalysisResult,
+  type CuePolicy,
+  CueSelector,
+  type LandmarkFrame,
+} from "@fitpilot/exercise-rules";
 import { isOutOfFrame, toLandmarkFrame } from "../landmarks";
+import type { SessionRecorder } from "../recording/recorder";
 import type { PoseDelegate } from "../worker/protocol";
 import {
   classifyCameraError,
@@ -37,6 +44,14 @@ export interface EngineDeps {
   /** repeating timer independent of video frames (the stall watchdog); returns a cancel */
   every(ms: number, callback: () => void): () => void;
   now(): number;
+  /** wall clock (epoch ms) for event timestamps; `Date.now` by default */
+  epochNow?(): number;
+}
+
+export interface EngineOptions {
+  /** turns what the engine observes into session events (FR-06/07); none ⇒ nothing recorded */
+  recorder?: SessionRecorder;
+  cuePolicy?: Partial<CuePolicy>;
 }
 
 export interface EngineSnapshot {
@@ -52,7 +67,19 @@ export interface EngineSnapshot {
    * own frame interval and the paint; see benchmarks.md for the end-to-end estimate.
    */
   latencyMs: number | null;
+  /**
+   * The one cue to show (FR-06), straight from the cue selector: null whenever tracking isn't
+   * reliable, while paused, and after the member answers it. Never the analyzer's raw cues.
+   */
+  cue: ActiveCue | null;
+  /** `now()` when the analysis result that produced `cue` was ready (cue latency, NFR) */
+  cueProducedAt: number | null;
+  /** the current (or last ended) set's recorded events; empty without a recorder */
+  events: readonly SessionEvent[];
 }
+
+const NO_EVENTS: readonly SessionEvent[] = [];
+const UNRELIABLE = { tracking: { reliable: false }, cues: [] } as const;
 
 export const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
@@ -86,13 +113,18 @@ export class LiveEngine {
   private generation = 0;
   /** bumps whenever the frame loop (re)starts or stops, so a frame from before a pause is dropped */
   private run = 0;
+  private readonly cues: CueSelector;
+  private readonly recorder: SessionRecorder | null;
 
   constructor(
     private readonly deps: EngineDeps,
     private readonly video: HTMLVideoElement,
     private readonly required: readonly LandmarkName[],
+    options: EngineOptions = {},
   ) {
     this.analyzer = deps.createAnalyzer();
+    this.cues = new CueSelector(options.cuePolicy);
+    this.recorder = options.recorder ?? null;
     this.state = {
       session: initialSession,
       tracking: this.monitor.snapshot,
@@ -101,7 +133,23 @@ export class LiveEngine {
       landmarks: null,
       delegate: null,
       latencyMs: null,
+      cue: null,
+      cueProducedAt: null,
+      events: NO_EVENTS,
     };
+  }
+
+  /** the engine's clock (the one `cueProducedAt` uses) */
+  now = () => this.deps.now();
+
+  /** "Got it" on the cue shown (FR-06): recorded, and the cue leaves the screen. */
+  acknowledgeCue(): void {
+    this.answerCue("acknowledged");
+  }
+
+  /** "Dismiss" on the cue shown (FR-06): recorded, and the cue leaves the screen. */
+  dismissCue(): void {
+    this.answerCue("dismissed");
   }
 
   subscribe = (listener: () => void) => {
@@ -144,8 +192,15 @@ export class LiveEngine {
   }
 
   pause(): void {
+    const wasRunning = this.state.session.status === "running";
     this.dispatch({ type: "pause" });
     this.stopLoop();
+    if (!wasRunning || this.state.session.status !== "paused") return;
+    // nothing is analysed while paused: the cue leaves, and an unreliable span ends here
+    const tMs = this.analysisTime();
+    this.cues.step(UNRELIABLE, tMs);
+    this.recorder?.pause(tMs);
+    this.update({ cue: null, cueProducedAt: null, events: this.recordedEvents() });
   }
 
   resume(): void {
@@ -155,6 +210,7 @@ export class LiveEngine {
 
   /** Stops processing and releases the camera (the indicator light goes off). */
   stop(): void {
+    this.endSet();
     this.generation += 1;
     this.stopLoop();
     this.source?.terminate();
@@ -183,7 +239,10 @@ export class LiveEngine {
       this.dispatch({ type: "workerCrashed" });
       // the analyzer keeps its state: the gap rules (maxGapMs) decide whether a rep survives
       if (this.state.session.status === "loading") void this.loadModel(generation);
-      else this.releaseCamera(); // gave up: don't leave the camera on with nothing analysing
+      else {
+        this.endSet(); // gave up: the set ends with the reps counted so far
+        this.releaseCamera(); // and don't leave the camera on with nothing analysing
+      }
     };
     // a source that is no longer current (stopped or replaced) must not outlive this call
     const stale = () => {
@@ -196,12 +255,15 @@ export class LiveEngine {
       if (stale()) return;
       this.update({ delegate });
       this.dispatch({ type: "modelReady" });
+      // the set starts when analysis does (a restarted worker continues the same set)
+      this.recorder?.startSet(this.analysisTime(), this.deps.epochNow?.() ?? Date.now());
       this.startLoop(generation);
     } catch {
       if (stale()) return;
       source.terminate();
       this.source = null;
       this.dispatch({ type: "modelFailed" });
+      this.endSet();
       this.releaseCamera();
     }
   }
@@ -233,7 +295,17 @@ export class LiveEngine {
     if (run !== this.run || this.state.session.status !== "running") return;
     if (this.deps.now() - this.lastResultAt < STALL_MS) return;
     if (this.state.tracking.issue === "no_frames") return;
-    this.update({ tracking: this.monitor.stall(), landmarks: null });
+    const tracking = this.monitor.stall();
+    const tMs = this.analysisTime();
+    this.cues.step(UNRELIABLE, tMs); // a stalled picture supports no cue
+    this.recorder?.frame({ tMs, analysis: null, tracking, shown: null });
+    this.update({
+      tracking,
+      landmarks: null,
+      cue: null,
+      cueProducedAt: null,
+      events: this.recordedEvents(),
+    });
   }
 
   private async processFrame(generation: number, run: number) {
@@ -288,23 +360,68 @@ export class LiveEngine {
       luma: this.luma,
       unsupportedView: analysis?.tracking.reason === "unsupported_view",
     });
+    // Stage 5 (FR-06): a cue needs both the analyzer's and the monitor's say-so, and the
+    // selector sees every frame, analysed or not, so it can withdraw and expire cues.
+    const reliable = (analysis?.tracking.reliable ?? false) && tracking.status === "tracking";
+    const decision = this.cues.step(
+      analysis && reliable ? { tracking: { reliable }, cues: analysis.cues } : UNRELIABLE,
+      tMs,
+    );
+    const producedAt = this.deps.now();
+    this.recorder?.frame({ tMs, analysis, tracking, shown: decision.shown });
     this.update({
       tracking,
       landmarks,
       reps: analysis?.reps ?? this.state.reps,
       phase: analysis?.phase ?? this.state.phase,
-      latencyMs: Math.round(this.deps.now() - grabbedAt),
+      latencyMs: Math.round(producedAt - grabbedAt),
+      cue: decision.active,
+      cueProducedAt: decision.shown
+        ? producedAt
+        : decision.active
+          ? this.state.cueProducedAt
+          : null,
+      events: this.recordedEvents(),
     });
     this.lastResultAt = this.deps.now(); // only a published result counts as "alive"
   }
 
   private onTrackEnded(generation: number) {
     if (generation !== this.generation) return;
+    this.endSet();
     this.stopLoop();
     this.source?.terminate();
     this.source = null;
     this.dispatch({ type: "trackEnded" });
     this.releaseCamera();
+  }
+
+  private answerCue(kind: "acknowledged" | "dismissed") {
+    const cue = this.state.cue;
+    if (!cue || this.state.session.status !== "running") return;
+    this.cues.dismiss(); // its rule still cools down: answering doesn't invite it straight back
+    this.recorder?.respond(kind, cue, this.analysisTime());
+    this.update({ cue: null, cueProducedAt: null, events: this.recordedEvents() });
+  }
+
+  /** Ends the recorded set (stop, or the camera/worker gave up); a no-op if none is open. */
+  private endSet() {
+    const recorder = this.recorder;
+    this.cues.reset();
+    if (!recorder?.setOpen) {
+      if (this.state.cue) this.update({ cue: null, cueProducedAt: null });
+      return;
+    }
+    recorder.endSet(this.analysisTime(), this.state.reps);
+    this.update({ cue: null, cueProducedAt: null, events: recorder.setEvents });
+  }
+
+  private analysisTime() {
+    return this.deps.now() - this.clockStart;
+  }
+
+  private recordedEvents() {
+    return this.recorder?.setEvents ?? NO_EVENTS;
   }
 
   private releaseCamera() {
@@ -316,10 +433,19 @@ export class LiveEngine {
   private resetAnalysis() {
     this.analyzer.reset();
     this.monitor.reset();
+    this.cues.reset(); // a new set: no cue carried over, no cooldowns
     this.clockStart = this.deps.now();
     this.lastLumaAt = -Infinity;
     this.luma = null;
-    this.update({ reps: 0, phase: null, landmarks: null, tracking: this.monitor.snapshot });
+    this.update({
+      reps: 0,
+      phase: null,
+      landmarks: null,
+      tracking: this.monitor.snapshot,
+      cue: null,
+      cueProducedAt: null,
+      events: NO_EVENTS,
+    });
   }
 
   private dispatch(action: SessionAction) {

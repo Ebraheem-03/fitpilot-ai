@@ -3,6 +3,9 @@ import { unpackFixtureFrame } from "../../landmarks";
 import type { PoseDelegate } from "../../worker/protocol";
 import type { PoseSource } from "../engine";
 
+/** Maps engine time to a fixture time; `hidden` ⇒ nobody detected (e.g. `feedFrameAt`). */
+export type ReplayTimeline = (tMs: number) => { tMs: number; hidden: boolean };
+
 /**
  * Test support (ADR-0010 §8): replays a recorded landmark fixture as if the worker had produced
  * it, so the engine runs end to end in Vitest. Not imported by product code.
@@ -13,7 +16,14 @@ export class FixtureReplayPoseSource implements PoseSource {
   closed = false;
   private readonly stepMs: number;
 
-  constructor(private readonly fixture: LandmarkFixture) {
+  /**
+   * `timeline` re-times the replay: e.g. a shallow squat built from the fixture's first descent
+   * (`bench/feed-timeline.ts`, the same mapping the e2e camera feed uses).
+   */
+  constructor(
+    private readonly fixture: LandmarkFixture,
+    private readonly timeline?: ReplayTimeline,
+  ) {
     this.stepMs = 1000 / fixture.source.fps;
   }
 
@@ -23,7 +33,9 @@ export class FixtureReplayPoseSource implements PoseSource {
 
   async detect(frame: ImageBitmap, tMs: number) {
     frame.close?.();
-    const i = Math.min(this.fixture.frames.length - 1, Math.floor(tMs / this.stepMs));
+    const at = this.timeline?.(tMs) ?? { tMs, hidden: false };
+    if (at.hidden) return { landmarks: null };
+    const i = Math.min(this.fixture.frames.length - 1, Math.floor(at.tMs / this.stepMs));
     return { landmarks: unpackFixtureFrame(this.fixture, i) };
   }
 

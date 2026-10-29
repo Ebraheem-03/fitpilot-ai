@@ -1,19 +1,50 @@
 "use client";
-import type { LandmarkName } from "@fitpilot/exercise-contracts";
+import type { LandmarkName, SessionEvent } from "@fitpilot/exercise-contracts";
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { phaseLabel } from "../exercise-viewer/labels";
 import { analyzerFor } from "./analyzers";
+import { CueCard } from "./CueCard";
 import { browserDeps } from "./engine/browser";
 import { type EngineSnapshot, LiveEngine } from "./engine/engine";
 import { initialSession } from "./engine/session";
-import { announcement, FAILURE_MESSAGES, guidance } from "./labels";
+import { announcement, count, FAILURE_MESSAGES, guidance } from "./labels";
+import { type EventSink, SessionRecorder } from "./recording/recorder";
+import { type SetSummary, summariseSet } from "./recording/summary";
+import { SetSummaryView } from "./SetSummaryView";
 import { drawSkeleton } from "./skeleton";
 
 export interface LiveExercise {
   id: string;
   name: string;
   required_landmarks: readonly LandmarkName[];
+}
+
+declare global {
+  interface Window {
+    /** practice-mode events for the e2e (never set in production builds) */
+    __fitpilotLiveEvents?: readonly SessionEvent[];
+  }
+}
+
+export interface LiveCoachProps {
+  exercise: LiveExercise;
+  /**
+   * The workout session these sets belong to (S8). Absent ⇒ practice mode: events are recorded
+   * for the post-set summary and stay on this page.
+   */
+  sessionId?: string;
+  /**
+   * Receives each batch of recorded events, only with a `sessionId` (S7: the on-device outbox,
+   * flushed after the camera stops; ADR-0011). Nothing in this component sends anything.
+   */
+  sink?: EventSink;
+  /** reps prescribed for the set: shows set progress */
+  targetReps?: number;
+  /** index of the first set this camera session records (later sets count on from it) */
+  setIndex?: number;
+  /** a set ended (stop, or the camera failed): its summary and recorded events */
+  onSetComplete?: (summary: SetSummary, events: readonly SessionEvent[]) => void;
 }
 
 const IDLE: EngineSnapshot = {
@@ -24,7 +55,12 @@ const IDLE: EngineSnapshot = {
   landmarks: null,
   delegate: null,
   latencyMs: null,
+  cue: null,
+  cueProducedAt: null,
+  events: [],
 };
+const MEDICAL_NOTICE =
+  "Coaching, not medical advice — stop if anything hurts, and talk to a qualified professional about pain or injury.";
 const noop = () => () => {};
 const button =
   "rounded-md border border-border px-4 py-2 font-medium hover:bg-surface disabled:opacity-50";
@@ -32,17 +68,34 @@ const primary =
   "rounded-md bg-brand px-4 py-2 font-medium text-brand-foreground hover:bg-brand-hover";
 
 /**
- * Live squat tracking (FR-04 + FR-05 rep counting, M2 exit): explain → camera permission →
- * preview with skeleton, tracking status, placement guidance and a rep counter that visibly
- * pauses when tracking isn't reliable (principle 3). Frames stay in this tab.
+ * Live squat tracking and coaching (FR-04, FR-05 rep counting, FR-06 cues): explain → camera
+ * permission → preview with skeleton, tracking status, placement guidance, a rep counter that
+ * visibly pauses when tracking isn't reliable (principle 3), the one cue the cue selector chose
+ * with its measurement and explanation, and a post-set summary from the recorded events.
+ * Frames stay in this tab, and nothing here sends events anywhere (ADR-0011).
  */
-export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
+export function LiveCoach({
+  exercise,
+  sessionId,
+  sink,
+  targetReps,
+  setIndex = 0,
+  onSetComplete,
+}: LiveCoachProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const pauseRef = useRef<HTMLButtonElement>(null);
   const stoppedRef = useRef<HTMLParagraphElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const cueHadFocus = useRef(false);
   const [engine, setEngine] = useState<LiveEngine | null>(null);
+  // Callbacks by ref: a new function identity on a parent re-render must not restart the camera.
+  const sinkRef = useRef(sink);
+  const onSetCompleteRef = useRef(onSetComplete);
+  useEffect(() => {
+    sinkRef.current = sink;
+    onSetCompleteRef.current = onSetComplete;
+  });
   // Keyed by value: a new array identity for the same landmarks (router refresh, HMR) must not
   // dispose the engine and switch the camera off mid-session.
   const requiredKey = exercise.required_landmarks.join(",");
@@ -51,19 +104,48 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
     const video = videoRef.current!;
     const create = analyzerFor(exercise.id)!;
     const required = requiredKey.split(",") as LandmarkName[];
-    const e = new LiveEngine(browserDeps(video, create), video, required);
+    const recorder = new SessionRecorder({
+      exerciseId: exercise.id,
+      sessionId,
+      sink: (events) => sinkRef.current?.(events),
+      firstSetIndex: setIndex,
+    });
+    const e = new LiveEngine(browserDeps(video, create), video, required, { recorder });
     setEngine(e);
     return () => e.dispose(); // leaving the page always turns the camera off
-  }, [exercise.id, requiredKey]);
+  }, [exercise.id, requiredKey, sessionId, setIndex]);
 
   const snap = useSyncExternalStore(
     engine?.subscribe ?? noop,
     engine?.getSnapshot ?? (() => IDLE),
     () => IDLE,
   );
-  const { session, tracking, reps, phase, landmarks } = snap;
+  const { session, tracking, reps, phase, landmarks, events } = snap;
   const live = session.status === "running" || session.status === "paused";
   const cameraOn = live || session.status === "loading";
+  const ended = session.status === "stopped" || session.status === "error";
+  const summary = useMemo(() => (ended ? summariseSet(events) : null), [ended, events]);
+  const reportedSet = useRef<string | null>(null);
+
+  // A set ended: hand its summary and events to the workout runner (S8), once.
+  useEffect(() => {
+    const last = events.at(-1);
+    if (!summary || last?.type !== "set_completed") return;
+    if (reportedSet.current === last.idempotency_key) return;
+    reportedSet.current = last.idempotency_key;
+    onSetCompleteRef.current?.(summary, events);
+  }, [summary, events]);
+
+  // e2e only (tests/e2e/live-cues.spec.ts): the current set's practice-mode events, readable by
+  // the test in the page. Never in a production build, never for a real session.
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production" || sessionId !== undefined) return;
+    window.__fitpilotLiveEvents = events;
+  }, [events, sessionId]);
+
+  const acknowledge = useCallback(() => engine?.acknowledgeCue(), [engine]);
+  const dismiss = useCallback(() => engine?.dismissCue(), [engine]);
+  const now = useCallback(() => engine?.now() ?? performance.now(), [engine]);
 
   // The control the member used disappears when the panel changes: move focus to where the
   // next action is, but never steal it from somewhere they've moved to themselves.
@@ -74,6 +156,17 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
     else if (session.status === "stopped") stoppedRef.current?.focus();
     else if (session.status === "error") errorRef.current?.focus();
   }, [session.status]);
+
+  // The cue's buttons vanish when it's answered, expires or is withdrawn. If focus was on them,
+  // put it on the session controls; a cue appearing never takes focus.
+  const cueKey = snap.cue?.shown_at_ms ?? null;
+  useEffect(() => {
+    if (!cueHadFocus.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return; // still on the card, or moved on by them
+    cueHadFocus.current = false;
+    pauseRef.current?.focus();
+  }, [cueKey]);
 
   useEffect(() => {
     const canvas = overlayRef.current;
@@ -91,6 +184,8 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
   const hint = guidance(tracking, landmarks, exercise.required_landmarks);
   const reliable = tracking.status === "tracking";
   const percent = Math.round(tracking.confidence * 100);
+  // the engine already withdraws cues when unreliable; never render one regardless
+  const cue = session.status === "running" && reliable ? snap.cue : null;
 
   return (
     <section
@@ -108,6 +203,9 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
       <p aria-live="polite" className="sr-only" data-testid="live-announcement">
         {announcement(session, tracking, reps)}
       </p>
+      <p role="note" data-testid="medical-notice" className="text-sm text-muted">
+        {MEDICAL_NOTICE}
+      </p>
 
       {(session.status === "idle" || session.status === "requesting") && (
         <div className="flex flex-col gap-3 rounded-xl border border-border p-5">
@@ -122,6 +220,10 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
             <li>
               Reps are only counted while tracking is reliable. If it isn&apos;t, we say so and
               pause the count.
+            </li>
+            <li>
+              Cues come from measured rules, show the measurement behind them, and only appear while
+              tracking is reliable.
             </li>
           </ul>
           <div className="flex flex-wrap items-center gap-3">
@@ -150,6 +252,7 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
           <p className="font-semibold">{FAILURE_MESSAGES[session.reason].title}</p>
           <p className="text-sm">{FAILURE_MESSAGES[session.reason].detail}</p>
           {reps > 0 && <p className="text-sm">{reps} reps were counted before it stopped.</p>}
+          {summary && <SetSummaryView summary={summary} targetReps={targetReps} />}
           <div className="flex flex-wrap items-center gap-3">
             {session.retryable && (
               <button type="button" className={primary} onClick={() => void engine?.start()}>
@@ -169,8 +272,9 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
             Camera off.
           </p>
           <p className="text-sm" data-testid="final-reps">
-            {reps} {reps === 1 ? "rep" : "reps"} counted.
+            {count(summary?.reps ?? reps)} counted.
           </p>
+          {summary && <SetSummaryView summary={summary} targetReps={targetReps} />}
           <div>
             <button type="button" className={primary} onClick={() => void engine?.start()}>
               Start again
@@ -237,11 +341,40 @@ export function LiveCoach({ exercise }: { exercise: LiveExercise }) {
             )}
           </div>
 
+          <div aria-live="polite" data-testid="cue-region">
+            {cue && (
+              <CueCard
+                key={cue.shown_at_ms}
+                cue={cue}
+                producedAt={snap.cueProducedAt}
+                now={now}
+                onAcknowledge={acknowledge}
+                onDismiss={dismiss}
+                onFocusChange={(inside) => (cueHadFocus.current = inside)}
+              />
+            )}
+          </div>
+
           <div className="rounded-xl border border-border p-4">
             <p className="text-sm text-muted">Reps</p>
             <p className="text-5xl font-semibold tabular-nums" data-testid="rep-count">
               {reps}
             </p>
+            {targetReps !== undefined && targetReps > 0 && (
+              <div className="mt-1 flex flex-col gap-1 text-sm">
+                <p data-testid="set-progress">
+                  {reps >= targetReps
+                    ? `Target reached: ${reps} of ${targetReps} reps. Stop when you're ready.`
+                    : `${reps} of ${targetReps} reps this set`}
+                </p>
+                <progress
+                  max={targetReps}
+                  value={Math.min(reps, targetReps)}
+                  aria-label="Set progress"
+                  className="w-full"
+                />
+              </div>
+            )}
             <p className="text-sm" data-testid="rep-state">
               {session.status !== "running"
                 ? ""
