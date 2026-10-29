@@ -22,14 +22,28 @@ test("EXIT: the mannequin's squats are counted, and the count pauses while nobod
   // Nothing leaves the device: record every request (any method, page or worker) that goes
   // anywhere but this app's own origin, and every upload-shaped request to it.
   const origin = new URL(page.url()).origin;
+  // ADR-0011: while the camera runs nothing but GETs to this origin; after it stops, only
+  // own-origin POSTs (the outbox flush) whose bodies carry no image or landmark data.
+  let cameraRunning = false;
   const sent: string[] = [];
+  const offOrigin: string[] = [];
+  const afterStop: { method: string; body: string; type: string }[] = [];
   page.on("request", (r) => {
-    if (new URL(r.url()).origin !== origin || r.method() !== "GET") {
-      sent.push(`${r.method()} ${r.url()}`);
+    const own = new URL(r.url()).origin === origin;
+    if (!own) offOrigin.push(`${r.method()} ${r.url()}`);
+    else if (r.method() !== "GET") {
+      if (cameraRunning) sent.push(`${r.method()} ${r.url()}`);
+      else
+        afterStop.push({
+          method: r.method(),
+          body: r.postData() ?? "",
+          type: r.headers()["content-type"] ?? "",
+        });
     }
   });
 
-  await expect(page.getByText(/processed on this device only/)).toBeVisible();
+  await expect(page.getByText(/never leave this device/)).toBeVisible();
+  cameraRunning = true;
   await page.getByRole("button", { name: "Start camera" }).click();
   await expect(coach(page)).toHaveAttribute("data-session", "running", { timeout: 60_000 });
 
@@ -75,7 +89,16 @@ test("EXIT: the mannequin's squats are counted, and the count pauses while nobod
   expect(median(latency)).toBeLessThanOrEqual(250);
 
   await page.getByRole("button", { name: "Stop camera" }).click();
+  cameraRunning = false;
   await expect(page.getByTestId("final-reps")).toHaveText(`${FEED_REPS} reps counted.`);
   expect(await page.locator("video").evaluate((v: HTMLVideoElement) => v.srcObject)).toBeNull();
-  expect(sent).toEqual([]);
+  expect(sent).toEqual([]); // nothing non-GET while the camera ran
+  expect(offOrigin).toEqual([]); // and never anything to another origin
+  // Whatever goes out after stopping must not contain frames or body points.
+  for (const req of afterStop) {
+    expect(req.type).not.toMatch(/^(image|video)\//);
+    expect(req.body).not.toMatch(/data:|landmarks|"visibility"|"x"\s*:|"y"\s*:|"z"\s*:/);
+  }
+  // This run is practice mode (no session): it must not send anything at all.
+  expect(afterStop).toEqual([]);
 });

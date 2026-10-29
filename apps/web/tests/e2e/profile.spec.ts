@@ -1,20 +1,7 @@
 // S7 (#13) — M0 exit condition: "a signed-in member can access their own profile" (FR-01).
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { field, fillAuthForm, signOut, signUp } from "./helpers";
-
-async function completeOnboarding(page: Page) {
-  await page.getByRole("link", { name: "Start" }).click();
-  await expect(page).toHaveURL(/\/app\/onboarding$/);
-  await field(page, "Main goal").selectOption("strength");
-  await page.getByRole("radio", { name: "Intermediate" }).check();
-  await field(page, "Days per week").fill("3");
-  await field(page, "Minutes per session").fill("45");
-  await page.getByRole("checkbox", { name: "Dumbbells" }).check();
-  await page.getByRole("checkbox", { name: "Bench" }).check();
-  await page.getByRole("button", { name: "Save profile" }).click();
-  await expect(page).toHaveURL(/\/app\/profile$/);
-}
+import { completeOnboarding, field, fillAuthForm, signOut, signUp } from "./helpers";
 
 async function expectSavedProfile(page: Page) {
   const profile = page.getByTestId("profile");
