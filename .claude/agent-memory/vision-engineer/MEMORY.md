@@ -1,2 +1,3 @@
 - [Squat cue threshold findings](squat-cue-threshold-findings.md) — lean/depth distributions, lean sweep, why both cue rules stay uncalibrated
-- [Worktree tooling pitfalls](worktree-tooling-pitfalls.md) — shell guard, git config lock, port 5432, prettier churn on labels.json
+- [Synthetic cue feed](synthetic-cue-feed.md) — shallow mannequin remap (peak 1033 ms ≈ 130°), 120–140° window, cooldown-driven loop timing
+- [Worktree tooling pitfalls](worktree-tooling-pitfalls.md) — shell guard triggers, git config lock, ports 5432/3100/8100, prettier churn on labels.json

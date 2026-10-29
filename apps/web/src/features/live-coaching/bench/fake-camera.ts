@@ -1,19 +1,14 @@
 import { AvatarSource } from "./avatar-source";
+import { feedDurationMs, feedFrameAt, type FeedPlan } from "./feed-timeline";
+
+export type { FeedPlan } from "./feed-timeline";
 
 /**
  * Builds the e2e camera feed (ADR-0010 §8): the mannequin squatting, as raw I420 frames that
  * Playwright writes to a .y4m for Chrome's --use-file-for-fake-video-capture. Ground truth is
- * known: a standing lead-in, then one rep per loop, with "hidden" loops showing an empty room.
+ * known: a standing lead-in, then one rep per loop (full or shallow, `feed-timeline.ts`), with
+ * "hidden" loops showing an empty room.
  */
-export interface FeedPlan {
-  width: number;
-  height: number;
-  fps: number;
-  leadInMs: number;
-  loops: number;
-  hiddenLoops: number[];
-}
-
 export class FakeCameraFeed {
   private readonly scratch: CanvasRenderingContext2D;
 
@@ -34,23 +29,20 @@ export class FakeCameraFeed {
   }
 
   get frameCount() {
-    const loopMs = this.avatar.clipDurationMs;
-    return Math.round(((this.plan.leadInMs + this.plan.loops * loopMs) / 1000) * this.plan.fps);
+    return Math.round(
+      (feedDurationMs(this.plan, this.avatar.clipDurationMs) / 1000) * this.plan.fps,
+    );
   }
 
   /** Frames [from, from + count) as concatenated I420 planes, base64-encoded. */
   frames(from: number, count: number): string {
-    const { width: w, height: h, fps, leadInMs, hiddenLoops } = this.plan;
-    const loopMs = this.avatar.clipDurationMs;
+    const { width: w, height: h, fps } = this.plan;
     const size = w * h * 1.5;
     const out = new Uint8Array(size * count);
     for (let i = 0; i < count; i++) {
       const t = ((from + i) * 1000) / fps;
-      const clipT = t - leadInMs;
-      const canvas =
-        clipT < 0
-          ? this.avatar.render(0)
-          : this.avatar.render(clipT, hiddenLoops.includes(Math.floor(clipT / loopMs)));
+      const { clipMs, hidden } = feedFrameAt(this.plan, this.avatar.clipDurationMs, t);
+      const canvas = this.avatar.render(clipMs, hidden);
       this.scratch.drawImage(canvas, 0, 0, w, h);
       toI420(this.scratch.getImageData(0, 0, w, h).data, w, h, out.subarray(i * size));
     }

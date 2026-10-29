@@ -3,7 +3,15 @@ import { join } from "node:path";
 import { LandmarkFixture } from "@fitpilot/exercise-contracts";
 import { SquatAnalyzer } from "@fitpilot/exercise-rules";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type EngineDeps, LiveEngine, type PoseSource, STALL_MS } from "./engine";
+import { feedFrameAt, type FeedPlan, SHALLOW_MOTION } from "../bench/feed-timeline";
+import { SessionRecorder } from "../recording/recorder";
+import {
+  type EngineDeps,
+  type EngineOptions,
+  LiveEngine,
+  type PoseSource,
+  STALL_MS,
+} from "./engine";
 import { FixtureReplayPoseSource } from "./testing/fixture-source";
 
 const FIXTURES = join(
@@ -24,7 +32,12 @@ class FakeTrack {
 }
 
 function harness(
-  opts: { source?: () => PoseSource; frameMs?: number; camera?: () => Promise<MediaStream> } = {},
+  opts: {
+    source?: () => PoseSource;
+    frameMs?: number;
+    camera?: () => Promise<MediaStream>;
+    options?: EngineOptions;
+  } = {},
 ) {
   const track = new FakeTrack();
   const stream = {
@@ -57,7 +70,7 @@ function harness(
     },
     now: () => clock,
   };
-  const engine = new LiveEngine(deps, video as unknown as HTMLVideoElement, REQUIRED);
+  const engine = new LiveEngine(deps, video as unknown as HTMLVideoElement, REQUIRED, opts.options);
   /** advance `ms` of wall time one animation frame at a time, letting async work settle */
   async function play(ms: number, onFrame?: () => void) {
     const step = opts.frameMs ?? 1000 / 30;
@@ -356,5 +369,173 @@ describe("LiveEngine (FR-04 live session, ADR-0010 §8)", () => {
     expect(h.snap().tracking).toMatchObject({ status: "unreliable", issue: "slow_device" });
     // the fps window needs ~2 s to fill; the lead-in is standing, so nothing can be counted
     expect(h.snap().reps).toBe(0);
+  });
+});
+
+/**
+ * The shallow feed the cue e2e uses (fake-camera.ts), replayed from the recorded lite-model
+ * landmarks of the mannequin's first descent: 1 s standing, then 7 shallow reps (~130° knee) of
+ * 3.5 s, the second one with nobody in view.
+ */
+const SHALLOW_PLAN: FeedPlan = {
+  width: 640,
+  height: 480,
+  fps: 30,
+  leadInMs: 1000,
+  loops: 7,
+  hiddenLoops: [1],
+  motion: SHALLOW_MOTION,
+};
+const shallowSource = () =>
+  new FixtureReplayPoseSource(mannequin, (t) => {
+    const { clipMs, hidden } = feedFrameAt(SHALLOW_PLAN, 4000, t);
+    return { tMs: clipMs, hidden };
+  });
+
+function cueHarness(opts: { source?: () => PoseSource } = {}) {
+  const recorder = new SessionRecorder({ exerciseId: "bodyweight_squat" });
+  const h = harness({ source: opts.source ?? shallowSource, options: { recorder } });
+  const frames: ReturnType<typeof h.snap>[] = [];
+  const record = () => frames.push(h.snap());
+  return { ...h, recorder, frames, record };
+}
+
+const shownCues = (frames: { cue: { shown_at_ms: number; rule_id: string } | null }[]) => [
+  ...new Map(frames.filter((f) => f.cue).map((f) => [f.cue!.shown_at_ms, f.cue!])).values(),
+];
+
+describe("LiveEngine cues + session events (FR-06, M3 S3)", () => {
+  const fetchSpy = vi.fn();
+  beforeEach(() => vi.stubGlobal("fetch", fetchSpy));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the shallow-depth cue for a counted shallow rep, recorded once as feedback_shown", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(26_000, h.record);
+    expect(h.snap().reps).toBe(6);
+    const cues = shownCues(h.frames);
+    // cooldown (20 s): the first rep's cue, then the next one after 6 loops of 3.5 s
+    expect(cues.map((c) => c.rule_id)).toEqual(["squat.depth.shallow", "squat.depth.shallow"]);
+    const shown = h.snap().events.filter((e) => e.type === "feedback_shown");
+    expect(shown.map((e) => e.type === "feedback_shown" && e.rule_id)).toEqual(
+      cues.map((c) => c.rule_id),
+    );
+    for (const e of shown) {
+      const knee = e.type === "feedback_shown" ? e.measurements.min_knee_angle_deg! : 0;
+      expect(knee).toBeGreaterThan(120);
+      expect(knee).toBeLessThanOrEqual(140);
+    }
+    expect(h.recorder.rejected).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("never has a cue while tracking isn't reliable, and withdraws it when nobody is in view", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(8000, h.record);
+    expect(shownCues(h.frames)).toHaveLength(1); // the first rep's cue appeared…
+    for (const f of h.frames) if (f.cue) expect(f.tracking.status).toBe("tracking");
+    // …and was gone once the hidden loop (4.5–8 s) began, before its 4 s were up
+    const firstAt = h.frames.find((f) => f.cue)!.cue!.shown_at_ms;
+    expect(firstAt).toBeGreaterThan(4500 - 4000);
+    expect(h.snap().cue).toBeNull();
+  });
+
+  it("records the time the analysis result that produced a cue was ready", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4500, h.record);
+    const first = h.frames.find((f) => f.cue)!;
+    expect(first.cueProducedAt).not.toBeNull();
+    expect(
+      h.frames.filter((f) => f.cue).every((f) => f.cueProducedAt === first.cueProducedAt),
+    ).toBe(true);
+  });
+
+  it("acknowledging removes the cue, is recorded, and its rule still cools down", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4500, () => {
+      if (h.snap().cue) h.engine.acknowledgeCue();
+    });
+    expect(h.snap().cue).toBeNull();
+    const types = h.snap().events.map((e) => e.type);
+    expect(types).toContain("feedback_acknowledged");
+    expect(types.filter((t) => t === "feedback_shown")).toHaveLength(1);
+    await h.play(10_000, h.record); // three more shallow reps: all inside the cooldown
+    expect(shownCues(h.frames)).toHaveLength(0);
+  });
+
+  it("dismissing removes the cue and records feedback_dismissed", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4500, () => {
+      if (h.snap().cue) h.engine.dismissCue();
+    });
+    expect(h.snap().events.filter((e) => e.type === "feedback_dismissed")).toHaveLength(1);
+    h.engine.dismissCue(); // nothing on screen: nothing recorded
+    expect(h.snap().events.filter((e) => e.type.startsWith("feedback_"))).toHaveLength(2);
+  });
+
+  it("pausing withdraws the cue", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4500, () => {
+      if (h.snap().cue && h.snap().session.status === "running") h.engine.pause();
+    });
+    expect(h.snap()).toMatchObject({ cue: null, session: { status: "paused" } });
+  });
+
+  it("a stalled camera picture withdraws the cue", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4500, () => {
+      if (h.snap().cue) h.freeze();
+    });
+    await h.play(STALL_MS + 500);
+    expect(h.snap()).toMatchObject({ cue: null, tracking: { issue: "no_frames" } });
+  });
+
+  it("stop ends the set: tracking spans and set_completed recorded, cue gone", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(12_000);
+    h.engine.stop();
+    const events = h.snap().events;
+    expect(events.at(-1)).toMatchObject({
+      type: "set_completed",
+      set_index: 0,
+      reps: h.snap().reps,
+    });
+    expect(events.filter((e) => e.type === "rep_completed")).toHaveLength(h.snap().reps);
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "tracking_degraded", reason: "no_person" }),
+    );
+    expect(h.snap().cue).toBeNull();
+    // the next set starts empty and numbered on
+    await h.engine.start();
+    expect(h.snap().events).toEqual([]);
+    h.engine.stop();
+    expect(h.snap().events).toEqual([
+      expect.objectContaining({ type: "set_completed", set_index: 1 }),
+    ]);
+  });
+
+  it("the full-depth mannequin gets no cue", async () => {
+    const h = cueHarness({ source: () => new FixtureReplayPoseSource(mannequin) });
+    await h.engine.start();
+    await h.play(24_000, h.record);
+    expect(h.snap().reps).toBe(5);
+    expect(shownCues(h.frames)).toEqual([]);
+    expect(h.snap().events.some((e) => e.type === "feedback_shown")).toBe(false);
+  });
+
+  it("a camera lost mid-set still records the set with the reps counted", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4000);
+    h.track.end();
+    expect(h.snap().events.at(-1)).toMatchObject({ type: "set_completed", reps: 1 });
   });
 });

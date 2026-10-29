@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { FAKE_CAMERA_Y4M } from "./tests/e2e/fake-camera";
+import { FAKE_CAMERA_Y4M, SHALLOW_CAMERA_Y4M } from "./tests/e2e/fake-camera";
 
 // Dedicated ports so e2e never reuses a dev server that may point at the hosted Supabase project.
 // Run via `make e2e` (scripts/e2e.sh), which provides a local Supabase stack + env (ADR-0003).
@@ -21,7 +21,7 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: [/live-coaching\.spec\.ts/, /\.setup\.ts/],
+      testIgnore: [/live-coaching\.spec\.ts/, /live-cues\.spec\.ts/, /\.setup\.ts/],
     },
     // Builds the mannequin camera feed (ADR-0010 §8) once, before the live-coaching exit test.
     { name: "fake-camera", testMatch: /fake-camera\.setup\.ts/, use: devices["Desktop Chrome"] },
@@ -33,6 +33,18 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         launchOptions: {
           args: [...FAKE_MEDIA, `--use-file-for-fake-video-capture=${FAKE_CAMERA_Y4M}`],
+        },
+      },
+    },
+    // FR-06 cues: the same real model on a feed of shallow squats that triggers squat.depth.shallow.
+    {
+      name: "live-cues",
+      testMatch: /live-cues\.spec\.ts/,
+      dependencies: ["fake-camera"],
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: {
+          args: [...FAKE_MEDIA, `--use-file-for-fake-video-capture=${SHALLOW_CAMERA_Y4M}`],
         },
       },
     },
