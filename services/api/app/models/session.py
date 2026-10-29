@@ -77,8 +77,12 @@ class WorkoutSession(Timestamps, Base):
     gym_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("gyms.id", ondelete="SET NULL"), index=True
     )
-    # Plans land in M3 S4; plain columns until then (no FK yet).
-    training_plan_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # The plan version and day (index into the plan's days, Monday first) this session follows.
+    # ON DELETE NO ACTION: plans are only deleted with their member (migration 0004 explains why
+    # not SET NULL). Ownership and day range are checked in services/workout_sessions.py.
+    training_plan_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("training_plans.id"), index=True
+    )
     plan_day_index: Mapped[int | None] = mapped_column(SmallInteger)
     status: Mapped[SessionStatus] = mapped_column(
         str_enum(SessionStatus, "session_status"),

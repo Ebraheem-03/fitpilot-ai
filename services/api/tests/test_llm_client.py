@@ -16,9 +16,9 @@ from app.services.llm import (
     LLMUnavailable,
     Message,
     ModelPrice,
+    pricing,
     strict_json_schema,
 )
-from app.services.llm import pricing
 from app.services.llm.budget import InMemoryLedger, seconds_until_utc_midnight
 from tests.llm_helpers import fake_client
 
@@ -35,9 +35,7 @@ KW: dict[str, Any] = {"schema_name": "answer", "prompt_version": "test-v1"}
 
 def llm_events(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
     fmt = JsonFormatter()
-    return [
-        json.loads(fmt.format(r)) for r in caplog.records if r.name == "fitpilot.llm"
-    ]
+    return [json.loads(fmt.format(r)) for r in caplog.records if r.name == "fitpilot.llm"]
 
 
 def test_parses_a_valid_reply_and_logs_the_call(caplog: pytest.LogCaptureFixture) -> None:
@@ -232,7 +230,9 @@ def test_free_tier_records_list_cost_but_bills_nothing() -> None:
 def test_daily_token_budget_makes_the_coach_busy_until_midnight() -> None:
     now = datetime(2026, 10, 29, 23, 0, tzinfo=UTC)
     ledger = InMemoryLedger()
-    guard = BudgetGuard(monthly_budget_usd=0, daily_token_budget=100, ledger=ledger, clock=lambda: now)
+    guard = BudgetGuard(
+        monthly_budget_usd=0, daily_token_budget=100, ledger=ledger, clock=lambda: now
+    )
     guard.check(pricing.FREE, 10, 10)
     ledger.add_tokens(100, now)
     with pytest.raises(LLMBusy) as e:
@@ -242,9 +242,7 @@ def test_daily_token_budget_makes_the_coach_busy_until_midnight() -> None:
 
 
 def test_daily_budget_counts_real_calls() -> None:
-    client, fake, _ = fake_client(
-        FakeReply.ok({"title": "x", "count": 1}), daily_token_budget=1
-    )
+    client, fake, _ = fake_client(FakeReply.ok({"title": "x", "count": 1}), daily_token_budget=1)
     client.generate_structured(Answer, MESSAGES, **KW)
     with pytest.raises(LLMBusy):
         client.generate_structured(Answer, MESSAGES, **KW)

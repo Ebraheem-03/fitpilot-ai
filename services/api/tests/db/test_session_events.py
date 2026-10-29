@@ -442,19 +442,37 @@ def test_skip_needs_a_known_exercise(api: TestClient) -> None:
 # --- null handling (review) ----------------------------------------------------------------------
 
 
-def test_json_null_for_an_optional_field_means_absent(api: TestClient, db: Session) -> None:
-    """Pydantic accepts `null` where zod would reject it; the API treats it as 'not provided'."""
+def test_json_null_for_an_optional_field_is_rejected_like_zod(api: TestClient, db: Session) -> None:
+    """Optional event fields are omitted, never null, as in the zod contract (PR #45 nit #1)."""
     h = member(api)
     sid = start(api, h)
     e = set_logged(sid, 0, SQUAT, reps=8, note=None, perceived_difficulty=None)
-    assert send(api, h, sid, [e]).json()["accepted"] == 1
+    assert send(api, h, sid, [e]).status_code == 422
+    assert db.scalar(select(func.count()).select_from(SessionEventRow)) == 0
 
+
+def test_omitted_optional_fields_are_stored_without_nulls(api: TestClient, db: Session) -> None:
+    h = member(api)
+    sid = start(api, h)
+    assert send(api, h, sid, [set_logged(sid, 0, SQUAT, reps=8)]).json()["accepted"] == 1
+    payload = db.scalar(select(SessionEventRow.payload))
+    assert payload is not None and None not in payload.values()
     api.post(f"{SESSIONS}/{sid}/complete", headers=h)
-    summary = api.get(f"{SESSIONS}/{sid}", headers=h).json()["summary"]
-    ex = summary["exercises"][0]
-    assert ex["note"] is None and ex["perceived_difficulty"] is None
-    assert ex["sets"][0]["perceived_difficulty"] is None
-    assert db.scalar(select(SessionEventRow.payload)) is not None
+    ex = api.get(f"{SESSIONS}/{sid}", headers=h).json()["summary"]["exercises"][0]
+    assert ex["note"] is None and ex["sets"][0]["perceived_difficulty"] is None
+
+
+def test_rows_stored_with_nulls_before_the_change_still_complete(
+    api: TestClient, db: Session
+) -> None:
+    h = member(api)
+    sid = start(api, h)
+    send(api, h, sid, [set_logged(sid, 0, SQUAT, reps=8)])
+    row = db.scalar(select(SessionEventRow))
+    assert row is not None
+    row.payload = {**row.payload, "note": None, "perceived_difficulty": None, "duration_s": None}
+    db.flush()
+    assert api.post(f"{SESSIONS}/{sid}/complete", headers=h).status_code == 200
 
 
 def test_null_does_not_rescue_a_missing_required_measure(api: TestClient) -> None:

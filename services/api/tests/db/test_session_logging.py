@@ -6,7 +6,9 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from tests.db.plan_helpers import seed_plan, sub_of
 from tests.db.session_helpers import (
     CONSENT,
     PROFILE,
@@ -106,16 +108,19 @@ def test_completion_logs_counts_and_replay_flag(
         assert secret not in out
 
 
-def test_lifecycle_events_carry_ids_only(api: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+def test_lifecycle_events_carry_ids_only(
+    api: TestClient, db: Session, caplog: pytest.LogCaptureFixture
+) -> None:
     h = member(api)
+    plan_id = str(seed_plan(db, sub_of(h)).id)
     caplog.set_level(logging.DEBUG)
-    sid = start(api, h, training_plan_id="7f0c2f2e-0d0a-4a39-9d64-0a7f6a1f6b11", plan_day_index=1)
+    sid = start(api, h, training_plan_id=plan_id, plan_day_index=1)
     api.delete(f"{SESSIONS}/{sid}", headers=h)
 
     started = named(caplog, "session.started")[0]
     assert started["session_id"] == sid and started["has_plan"] is True
     assert named(caplog, "session.deleted")[0]["session_id"] == sid
-    assert "7f0c2f2e" not in raw_output(caplog)
+    assert plan_id not in raw_output(caplog)
 
 
 def test_denied_access_is_logged_with_the_requested_id_and_action(

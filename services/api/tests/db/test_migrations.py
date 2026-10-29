@@ -16,6 +16,8 @@ EXPECTED_TABLES = {
     "workout_sessions",
     "session_events",
     "performance_records",
+    "training_plans",
+    "planned_exercises",
 }
 
 

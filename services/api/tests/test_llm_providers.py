@@ -110,7 +110,9 @@ def test_429_reads_retry_after() -> None:
     assert (response.outcome, response.retry_after_s) == ("rate_limited", 274.0)
 
 
-@pytest.mark.parametrize(("status", "outcome"), [(503, "busy"), (502, "busy"), (500, "unavailable")])
+@pytest.mark.parametrize(
+    ("status", "outcome"), [(503, "busy"), (502, "busy"), (500, "unavailable")]
+)
 def test_server_errors(status: int, outcome: str) -> None:
     p, _ = provider(lambda r: httpx.Response(status))
     assert p.complete(REQUEST).outcome == outcome
