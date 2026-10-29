@@ -1,0 +1,261 @@
+{
+  "suite_version": 1,
+  "description": "Plan-generation regression suite (FR-02, FR-13, blueprint §10). Synthetic profiles only: the five fields the generator may see, no people.",
+  "gate": {
+    "valid_after_repair_min": 0.95,
+    "constraint_adherence_min": 1.0,
+    "expected_escalation_min": 1.0,
+    "false_escalation_max": 0.05,
+    "min_scored_plans": 20
+  },
+  "profiles": [
+    {
+      "id": "p01_general_beginner_home",
+      "description": "Baseline: three short home sessions, nothing to train with.",
+      "inputs": {
+        "primary_goal": "general_fitness",
+        "experience_level": "beginner",
+        "days_per_week": 3,
+        "session_minutes": 30,
+        "equipment": []
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p02_strength_intermediate_dumbbells",
+      "description": "Dumbbells should show up in the plan.",
+      "inputs": {
+        "primary_goal": "strength",
+        "experience_level": "intermediate",
+        "days_per_week": 4,
+        "session_minutes": 45,
+        "equipment": ["dumbbells"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p03_muscle_advanced_dumbbells_bench",
+      "description": "Bench is owned but no approved exercise needs it.",
+      "inputs": {
+        "primary_goal": "muscle_gain",
+        "experience_level": "advanced",
+        "days_per_week": 5,
+        "session_minutes": 60,
+        "equipment": ["bench", "dumbbells"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p04_fat_loss_beginner_two_short_days",
+      "description": "Two 20-minute sessions.",
+      "inputs": {
+        "primary_goal": "fat_loss",
+        "experience_level": "beginner",
+        "days_per_week": 2,
+        "session_minutes": 20,
+        "equipment": []
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p05_mobility_intermediate_mat",
+      "description": "A mat, which no approved exercise requires.",
+      "inputs": {
+        "primary_goal": "mobility",
+        "experience_level": "intermediate",
+        "days_per_week": 3,
+        "session_minutes": 25,
+        "equipment": ["mat"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p06_general_advanced_six_long_days",
+      "description": "Six 75-minute days: the M3 S0 spike's truncation case (long JSON).",
+      "inputs": {
+        "primary_goal": "general_fitness",
+        "experience_level": "advanced",
+        "days_per_week": 6,
+        "session_minutes": 75,
+        "equipment": ["dumbbells"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p07_strength_beginner_no_equipment",
+      "description": "Edge: a strength goal with no equipment. Bodyweight only, still a valid plan.",
+      "inputs": {
+        "primary_goal": "strength",
+        "experience_level": "beginner",
+        "days_per_week": 2,
+        "session_minutes": 40,
+        "equipment": []
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p08_muscle_beginner_no_equipment",
+      "description": "Edge: muscle gain with no equipment.",
+      "inputs": {
+        "primary_goal": "muscle_gain",
+        "experience_level": "beginner",
+        "days_per_week": 3,
+        "session_minutes": 45,
+        "equipment": []
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p09_fat_loss_advanced_unusable_equipment",
+      "description": "Kettlebell and band: equipment the catalogue never uses. Must not drift to dumbbells.",
+      "inputs": {
+        "primary_goal": "fat_loss",
+        "experience_level": "advanced",
+        "days_per_week": 5,
+        "session_minutes": 30,
+        "equipment": ["kettlebell", "resistance_band"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p10_mobility_beginner_one_day",
+      "description": "Edge: one 15-minute day a week.",
+      "inputs": {
+        "primary_goal": "mobility",
+        "experience_level": "beginner",
+        "days_per_week": 1,
+        "session_minutes": 15,
+        "equipment": []
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p11_strength_advanced_one_long_day_barbell",
+      "description": "Edge: one 90-minute day, barbell and bench owned but unused by the catalogue.",
+      "inputs": {
+        "primary_goal": "strength",
+        "experience_level": "advanced",
+        "days_per_week": 1,
+        "session_minutes": 90,
+        "equipment": ["barbell", "bench"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p12_general_intermediate_seven_by_ten",
+      "description": "Edge: 7 days x 10 minutes, half of which is the warm-up. A minimal valid plan or needs_review are both acceptable.",
+      "inputs": {
+        "primary_goal": "general_fitness",
+        "experience_level": "intermediate",
+        "days_per_week": 7,
+        "session_minutes": 10,
+        "equipment": []
+      },
+      "expect": { "outcome": "either" }
+    },
+    {
+      "id": "p13_fat_loss_intermediate_daily_dumbbells",
+      "description": "Seven 20-minute days with dumbbells.",
+      "inputs": {
+        "primary_goal": "fat_loss",
+        "experience_level": "intermediate",
+        "days_per_week": 7,
+        "session_minutes": 20,
+        "equipment": ["dumbbells"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p14_muscle_intermediate_max_minutes",
+      "description": "Edge: the 180-minute maximum on four days.",
+      "inputs": {
+        "primary_goal": "muscle_gain",
+        "experience_level": "intermediate",
+        "days_per_week": 4,
+        "session_minutes": 180,
+        "equipment": ["bench", "dumbbells", "mat"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p15_general_beginner_min_minutes",
+      "description": "Edge: the 10-minute minimum on three days.",
+      "inputs": {
+        "primary_goal": "general_fitness",
+        "experience_level": "beginner",
+        "days_per_week": 3,
+        "session_minutes": 10,
+        "equipment": []
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p16_strength_intermediate_six_short_pullup_bar",
+      "description": "Conflicting constraints: strength, six 15-minute days, and only a pull-up bar the catalogue can't use.",
+      "inputs": {
+        "primary_goal": "strength",
+        "experience_level": "intermediate",
+        "days_per_week": 6,
+        "session_minutes": 15,
+        "equipment": ["pull_up_bar"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p17_mobility_advanced_two_long_days",
+      "description": "Mobility goal with two 120-minute days.",
+      "inputs": {
+        "primary_goal": "mobility",
+        "experience_level": "advanced",
+        "days_per_week": 2,
+        "session_minutes": 120,
+        "equipment": ["mat", "resistance_band"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5 }
+    },
+    {
+      "id": "p18_muscle_advanced_seven_by_max",
+      "description": "Conflicting constraints: every day at the 180-minute maximum with a 7-exercise catalogue. Longest output in the suite.",
+      "inputs": {
+        "primary_goal": "muscle_gain",
+        "experience_level": "advanced",
+        "days_per_week": 7,
+        "session_minutes": 180,
+        "equipment": ["dumbbells"]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p19_fat_loss_beginner_all_equipment",
+      "description": "Every equipment item owned.",
+      "inputs": {
+        "primary_goal": "fat_loss",
+        "experience_level": "beginner",
+        "days_per_week": 4,
+        "session_minutes": 60,
+        "equipment": [
+          "barbell",
+          "bench",
+          "dumbbells",
+          "kettlebell",
+          "mat",
+          "pull_up_bar",
+          "resistance_band"
+        ]
+      },
+      "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+    },
+    {
+      "id": "p20_infeasible_five_minutes",
+      "description": "Escalation expected: 5-minute sessions. The 5-minute warm-up alone fills them, so every plan breaks the session-length rule and must end in needs_review. Below the API's 10-minute floor on purpose: the generator is called directly to prove infeasible input is never silently accepted.",
+      "inputs": {
+        "primary_goal": "general_fitness",
+        "experience_level": "intermediate",
+        "days_per_week": 3,
+        "session_minutes": 5,
+        "equipment": []
+      },
+      "expect": { "outcome": "needs_review" }
+    }
+  ]
+}

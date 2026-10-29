@@ -1,0 +1,522 @@
+{
+  "report_format": 1,
+  "prompt_version": "plan-v1",
+  "prompt_sha256": "7d7a4873fb3b99ad18f20efe0e27ddad4ac340791b8e6307b790afbfb61878c6",
+  "suite_version": 1,
+  "suite_profiles": 20,
+  "gate": {
+    "valid_after_repair_min": 0.95,
+    "constraint_adherence_min": 1.0,
+    "expected_escalation_min": 1.0,
+    "false_escalation_max": 0.05,
+    "min_scored_plans": 20
+  },
+  "runs": [
+    {
+      "mode": "live",
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "reasoning_effort": "low",
+      "prompt_sha256": "7d7a4873fb3b99ad18f20efe0e27ddad4ac340791b8e6307b790afbfb61878c6",
+      "started_at": "2026-10-29T10:47:39+00:00",
+      "finished_at": "2026-10-29T11:06:13+00:00",
+      "runs_per_fixture": 2,
+      "planned": 40,
+      "stopped": "run token budget 110000 reached (101535 used)",
+      "expected": {
+        "p01_general_beginner_home": "active",
+        "p02_strength_intermediate_dumbbells": "active",
+        "p03_muscle_advanced_dumbbells_bench": "active",
+        "p04_fat_loss_beginner_two_short_days": "active",
+        "p05_mobility_intermediate_mat": "active",
+        "p06_general_advanced_six_long_days": "active",
+        "p07_strength_beginner_no_equipment": "active",
+        "p08_muscle_beginner_no_equipment": "active",
+        "p09_fat_loss_advanced_unusable_equipment": "active",
+        "p10_mobility_beginner_one_day": "active",
+        "p11_strength_advanced_one_long_day_barbell": "active",
+        "p12_general_intermediate_seven_by_ten": "either",
+        "p13_fat_loss_intermediate_daily_dumbbells": "active",
+        "p14_muscle_intermediate_max_minutes": "active",
+        "p15_general_beginner_min_minutes": "active",
+        "p16_strength_intermediate_six_short_pullup_bar": "active",
+        "p17_mobility_advanced_two_long_days": "active",
+        "p18_muscle_advanced_seven_by_max": "active",
+        "p19_fat_loss_beginner_all_equipment": "active",
+        "p20_infeasible_five_minutes": "needs_review"
+      },
+      "aggregate": {
+        "attempted": 38,
+        "scored": 38,
+        "errors": {},
+        "validity": {
+          "feasible_plans": 35,
+          "schema_valid_first_try": {
+            "n": 31,
+            "of": 35,
+            "rate": 0.8857
+          },
+          "valid_first_try": {
+            "n": 31,
+            "of": 35,
+            "rate": 0.8857
+          },
+          "schema_valid_after_repair": {
+            "n": 35,
+            "of": 35,
+            "rate": 1.0
+          },
+          "valid_after_repair": {
+            "n": 35,
+            "of": 35,
+            "rate": 1.0
+          },
+          "repaired": {
+            "n": 4,
+            "of": 35,
+            "rate": 0.1143
+          },
+          "first_issue_codes": {
+            "duplicate_exercise": 1,
+            "generation_failed": 4
+          }
+        },
+        "constraints": {
+          "catalogue": {
+            "n": 37,
+            "of": 37,
+            "rate": 1.0
+          },
+          "equipment": {
+            "n": 37,
+            "of": 37,
+            "rate": 1.0
+          },
+          "days": {
+            "n": 37,
+            "of": 37,
+            "rate": 1.0
+          },
+          "session_length": {
+            "n": 37,
+            "of": 37,
+            "rate": 1.0
+          },
+          "prescription": {
+            "n": 37,
+            "of": 37,
+            "rate": 1.0
+          },
+          "all": {
+            "n": 37,
+            "of": 37,
+            "rate": 1.0
+          }
+        },
+        "properties": {
+          "min_fill": {
+            "n": 32,
+            "of": 35,
+            "rate": 0.9143
+          },
+          "uses_equipment": {
+            "n": 13,
+            "of": 13,
+            "rate": 1.0
+          }
+        },
+        "escalation": {
+          "expected_escalations": {
+            "n": 1,
+            "of": 1,
+            "rate": 1.0
+          },
+          "false_escalations": {
+            "n": 0,
+            "of": 35,
+            "rate": 0.0
+          },
+          "either_outcomes": {
+            "active": 2,
+            "needs_review": 0
+          }
+        },
+        "latency_s": {
+          "plan_p50": 4.4965,
+          "plan_p95": 9.420200000000001,
+          "first_call_p50": 4.0003,
+          "first_call_p95": 9.420200000000001
+        },
+        "tokens": {
+          "calls": 43,
+          "total_in": 40862,
+          "total_out": 60673,
+          "per_plan_in": 1075,
+          "per_plan_out": 1597
+        },
+        "cost_usd": {
+          "list_total": 0.042533,
+          "list_per_plan": 0.001119,
+          "billed_total": 0.0
+        },
+        "rate_limited_429": 4,
+        "per_fixture": {
+          "p01_general_beginner_home": {
+            "valid_first_try": 1,
+            "repaired": 1,
+            "escalated": 0,
+            "error": 0
+          },
+          "p02_strength_intermediate_dumbbells": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p03_muscle_advanced_dumbbells_bench": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p04_fat_loss_beginner_two_short_days": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p05_mobility_intermediate_mat": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p06_general_advanced_six_long_days": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p07_strength_beginner_no_equipment": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p08_muscle_beginner_no_equipment": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p09_fat_loss_advanced_unusable_equipment": {
+            "valid_first_try": 1,
+            "repaired": 1,
+            "escalated": 0,
+            "error": 0
+          },
+          "p10_mobility_beginner_one_day": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p11_strength_advanced_one_long_day_barbell": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p12_general_intermediate_seven_by_ten": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p13_fat_loss_intermediate_daily_dumbbells": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p14_muscle_intermediate_max_minutes": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p15_general_beginner_min_minutes": {
+            "valid_first_try": 1,
+            "repaired": 1,
+            "escalated": 0,
+            "error": 0
+          },
+          "p16_strength_intermediate_six_short_pullup_bar": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p17_mobility_advanced_two_long_days": {
+            "valid_first_try": 2,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p18_muscle_advanced_seven_by_max": {
+            "valid_first_try": 1,
+            "repaired": 1,
+            "escalated": 0,
+            "error": 0
+          },
+          "p19_fat_loss_beginner_all_equipment": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p20_infeasible_five_minutes": {
+            "valid_first_try": 0,
+            "repaired": 0,
+            "escalated": 1,
+            "error": 0
+          }
+        },
+        "failures": [
+          {
+            "fixture_id": "p01_general_beginner_home",
+            "expected": "active",
+            "result": "repaired",
+            "error": null,
+            "first_issue_codes": ["generation_failed"],
+            "final_issues": [],
+            "violated_constraints": []
+          },
+          {
+            "fixture_id": "p09_fat_loss_advanced_unusable_equipment",
+            "expected": "active",
+            "result": "repaired",
+            "error": null,
+            "first_issue_codes": ["generation_failed"],
+            "final_issues": [],
+            "violated_constraints": []
+          },
+          {
+            "fixture_id": "p15_general_beginner_min_minutes",
+            "expected": "active",
+            "result": "repaired",
+            "error": null,
+            "first_issue_codes": ["generation_failed"],
+            "final_issues": [],
+            "violated_constraints": []
+          }
+        ]
+      },
+      "gate_failures": [],
+      "tokens_used_incl_abandoned": 101535,
+      "pacer_waited_s": 860.3,
+      "rate_limits_seen": {
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "8000"
+      }
+    },
+    {
+      "mode": "live",
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "reasoning_effort": "medium",
+      "prompt_sha256": "7d7a4873fb3b99ad18f20efe0e27ddad4ac340791b8e6307b790afbfb61878c6",
+      "started_at": "2026-10-29T11:07:28+00:00",
+      "finished_at": "2026-10-29T11:12:31+00:00",
+      "runs_per_fixture": 1,
+      "planned": 10,
+      "stopped": "daily cap (rate_limited, retry-after 456 s)",
+      "expected": {
+        "p01_general_beginner_home": "active",
+        "p04_fat_loss_beginner_two_short_days": "active",
+        "p06_general_advanced_six_long_days": "active",
+        "p07_strength_beginner_no_equipment": "active",
+        "p10_mobility_beginner_one_day": "active",
+        "p12_general_intermediate_seven_by_ten": "either",
+        "p14_muscle_intermediate_max_minutes": "active",
+        "p16_strength_intermediate_six_short_pullup_bar": "active",
+        "p18_muscle_advanced_seven_by_max": "active",
+        "p20_infeasible_five_minutes": "needs_review"
+      },
+      "aggregate": {
+        "attempted": 8,
+        "scored": 8,
+        "errors": {},
+        "validity": {
+          "feasible_plans": 7,
+          "schema_valid_first_try": {
+            "n": 7,
+            "of": 7,
+            "rate": 1.0
+          },
+          "valid_first_try": {
+            "n": 7,
+            "of": 7,
+            "rate": 1.0
+          },
+          "schema_valid_after_repair": {
+            "n": 7,
+            "of": 7,
+            "rate": 1.0
+          },
+          "valid_after_repair": {
+            "n": 7,
+            "of": 7,
+            "rate": 1.0
+          },
+          "repaired": {
+            "n": 0,
+            "of": 7,
+            "rate": 0.0
+          },
+          "first_issue_codes": {}
+        },
+        "constraints": {
+          "catalogue": {
+            "n": 8,
+            "of": 8,
+            "rate": 1.0
+          },
+          "equipment": {
+            "n": 8,
+            "of": 8,
+            "rate": 1.0
+          },
+          "days": {
+            "n": 8,
+            "of": 8,
+            "rate": 1.0
+          },
+          "session_length": {
+            "n": 8,
+            "of": 8,
+            "rate": 1.0
+          },
+          "prescription": {
+            "n": 8,
+            "of": 8,
+            "rate": 1.0
+          },
+          "all": {
+            "n": 8,
+            "of": 8,
+            "rate": 1.0
+          }
+        },
+        "properties": {
+          "min_fill": {
+            "n": 7,
+            "of": 7,
+            "rate": 1.0
+          },
+          "uses_equipment": {
+            "n": 2,
+            "of": 2,
+            "rate": 1.0
+          }
+        },
+        "escalation": {
+          "expected_escalations": {
+            "n": 0,
+            "of": 0,
+            "rate": null
+          },
+          "false_escalations": {
+            "n": 0,
+            "of": 7,
+            "rate": 0.0
+          },
+          "either_outcomes": {
+            "active": 1,
+            "needs_review": 0
+          }
+        },
+        "latency_s": {
+          "plan_p50": 5.152399999999999,
+          "plan_p95": 13.014299999999999,
+          "first_call_p50": 5.152399999999999,
+          "first_call_p95": 13.014299999999999
+        },
+        "tokens": {
+          "calls": 8,
+          "total_in": 7353,
+          "total_out": 20330,
+          "per_plan_in": 919,
+          "per_plan_out": 2541
+        },
+        "cost_usd": {
+          "list_total": 0.013301,
+          "list_per_plan": 0.001663,
+          "billed_total": 0.0
+        },
+        "rate_limited_429": 0,
+        "per_fixture": {
+          "p01_general_beginner_home": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p04_fat_loss_beginner_two_short_days": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p06_general_advanced_six_long_days": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p07_strength_beginner_no_equipment": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p10_mobility_beginner_one_day": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p12_general_intermediate_seven_by_ten": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p14_muscle_intermediate_max_minutes": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          },
+          "p16_strength_intermediate_six_short_pullup_bar": {
+            "valid_first_try": 1,
+            "repaired": 0,
+            "escalated": 0,
+            "error": 0
+          }
+        },
+        "failures": []
+      },
+      "gate_failures": [
+        "only 8 plans scored; the gate needs 20",
+        "no escalation-expected plan was scored"
+      ],
+      "tokens_used_incl_abandoned": 27683,
+      "pacer_waited_s": 253.8,
+      "rate_limits_seen": {
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "8000"
+      }
+    }
+  ]
+}

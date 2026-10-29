@@ -1,0 +1,21 @@
+{
+  "description": "Scripted fake-provider replies for the offline run (make verify). Per profile id, the replies to one generate_plan call in order; once they run out, the rule-based planner answers. Known outcomes, so the scorer itself is tested (tests/test_eval_plans.py).",
+  "replies": {
+    "p03_muscle_advanced_dumbbells_bench": [
+      { "kind": "json_validate_failed" },
+      { "kind": "planner" }
+    ],
+    "p06_general_advanced_six_long_days": [
+      { "kind": "planner", "mutate": "drop_day" },
+      { "kind": "planner" }
+    ],
+    "p07_strength_beginner_no_equipment": [
+      { "kind": "planner", "mutate": "add_dumbbells" },
+      { "kind": "planner", "mutate": "add_dumbbells" }
+    ],
+    "p10_mobility_beginner_one_day": [
+      { "kind": "rate_limited", "retry_after_s": 1 },
+      { "kind": "planner" }
+    ]
+  }
+}
