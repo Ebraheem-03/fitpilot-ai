@@ -8,7 +8,15 @@ from sqlalchemy import Engine, create_engine, text
 from app.models import Base
 from tests.conftest import alembic_config
 
-EXPECTED_TABLES = {"users", "member_profiles", "gyms", "gym_memberships"}
+EXPECTED_TABLES = {
+    "users",
+    "member_profiles",
+    "gyms",
+    "gym_memberships",
+    "workout_sessions",
+    "session_events",
+    "performance_records",
+}
 
 
 def test_upgrade_downgrade_round_trip(db_url: str) -> None:

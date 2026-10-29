@@ -68,5 +68,22 @@ class ProfileOut(BaseModel):
     days_per_week: int | None
     session_minutes: int | None
     equipment: list[Equipment]
+    # null = no consent given (or withdrawn); ADR-0011 §4
+    tracking_data_consent_at: datetime | None
+    tracking_data_consent_version: int | None
     created_at: datetime
     updated_at: datetime
+
+
+# Bump when the consent copy changes in a way that needs a fresh agreement (then also raise
+# MIN_TRACKING_CONSENT_VERSION so older agreements stop counting).
+TRACKING_CONSENT_VERSION = 1
+MIN_TRACKING_CONSENT_VERSION = 1
+
+
+class TrackingConsentGrant(BaseModel):
+    """The member agreed to the copy shown as `version`. The server sets the timestamp."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: Annotated[int, Field(ge=MIN_TRACKING_CONSENT_VERSION, le=TRACKING_CONSENT_VERSION)]
