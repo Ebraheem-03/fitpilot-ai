@@ -34,6 +34,7 @@ from app.schemas.workout_session import (
 )
 from app.services import profiles, session_rules
 from app.services.catalog import load_catalog
+from app.services.plans import service as training_plans
 from app.services.session_summary import build_summary
 
 logger = logging.getLogger("fitpilot.sessions")
@@ -74,6 +75,14 @@ class IdempotencyKeyReuse(Exception):
     pass
 
 
+class PlanNotFound(Exception):
+    """The referenced training plan doesn't exist or isn't the caller's."""
+
+
+class PlanDayOutOfRange(Exception):
+    """`plan_day_index` is not a day of that plan."""
+
+
 def _owned(
     db: Session, user: User, session_id: uuid.UUID, action: str, *, for_update: bool = False
 ) -> WorkoutSession:
@@ -98,6 +107,8 @@ def start(
         if existing is not None:
             return _replayed_start(existing, data), False
 
+    if data.training_plan_id is not None:
+        _check_plan_day(db, user, data.training_plan_id, data.plan_day_index)
     gyms = repo.active_gym_ids(db, user.id)
     session = repo.add(
         db,
@@ -121,6 +132,18 @@ def start(
         has_gym=session.gym_id is not None,
     )
     return session, True
+
+
+def _check_plan_day(db: Session, user: User, plan_id: uuid.UUID, day_index: int | None) -> None:
+    """The plan must be the caller's (another member's is "not found") and the day must exist in
+    it as the member sees it (days Monday first; a plan in review has none)."""
+    try:
+        plan = training_plans.get_own(db, user, plan_id, action="start_session")
+    except training_plans.PlanNotFound as e:
+        raise PlanNotFound from e
+    if day_index is None or day_index >= training_plans.day_count(plan):
+        log_event(logger, "session.start_rejected", logging.WARNING, reason="plan_day_out_of_range")
+        raise PlanDayOutOfRange
 
 
 def _replayed_start(session: WorkoutSession, data: StartSession) -> WorkoutSession:
@@ -211,7 +234,8 @@ def ingest_events(
                 "type": SessionEventType(e.type),
                 "exercise_id": e.exercise_id,
                 "occurred_at": e.occurred_at,
-                "payload": e.model_dump(mode="json"),
+                # Optional fields are omitted, never null (zod `.optional()`, PR #45 nit #1).
+                "payload": e.model_dump(mode="json", exclude_none=True),
             }
         )
     accepted = repo.insert_events(db, rows)
@@ -252,7 +276,11 @@ def complete(
 
     data = data or CompleteSession()
     rows = repo.stored_events(db, session_id)
-    events = [_EVENT.validate_python(row.payload) for row in rows]
+    # Rows stored before optional fields stopped accepting null may still carry them.
+    events = [
+        _EVENT.validate_python({k: v for k, v in row.payload.items() if v is not None})
+        for row in rows
+    ]
     completed_at = datetime.now(UTC)
     summary, metrics = build_summary(
         session_id=session_id,

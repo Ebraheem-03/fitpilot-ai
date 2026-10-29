@@ -58,12 +58,9 @@ def facets(node: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
     if "properties" in node:
         defaulted = {k for k, v in node["properties"].items() if "default" in v}
         required = set(node.get("required", [])) - defaulted
+        # Nullability is compared for optional fields too: zod `.optional()` rejects null, so the
+        # pydantic mirror must as well (app/schemas/session.py `_reject_null`).
         out["properties"] = {k: facets(v, defs) for k, v in node["properties"].items()}
-        for key in out["properties"]:
-            if key not in required:
-                # An omitted optional field and an explicit null are not told apart here: zod
-                # `.optional()` rejects null, pydantic `X | None = None` accepts it.
-                out["properties"][key]["nullable"] = False
         out["required"] = sorted(required)
         out["closed"] = node.get("additionalProperties") is False
     if "items" in node:

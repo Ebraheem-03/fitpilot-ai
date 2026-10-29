@@ -5,21 +5,53 @@ truth and tests/test_session_contract_parity.py fails when the two drift. Everyt
 `extra="forbid"`: nothing can ride along with an event (no landmarks, frames or per-frame values).
 """
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import (
     AfterValidator,
     AwareDatetime,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
+    GetJsonSchemaHandler,
     StringConstraints,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema, PydanticCustomError
 
 from app.schemas.cue_rules import cue_rule_violation
 from app.schemas.exercise import Prescription
+
+
+def _reject_null(value: Any) -> Any:
+    # Runs only when the key is present: an omitted field keeps its None default unvalidated.
+    if value is None:
+        raise PydanticCustomError("omit_not_null", "omit the field instead of sending null")
+    return value
+
+
+class _OmittedNotNull:
+    """JSON schema: drop the null branch, so the schema says what the validator enforces."""
+
+    def __get_pydantic_json_schema__(
+        self, core_schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        schema = handler(core_schema)
+        branches = [b for b in schema.get("anyOf", []) if b != {"type": "null"}]
+        if len(branches) == 1:
+            rest = {k: v for k, v in schema.items() if k != "anyOf"}
+            return {**rest, **branches[0]}
+        return schema
+
+
+# An optional field that may be omitted but is never `null`, matching zod `.optional()` (the zod
+# contract is the source of truth and the browser omits absent keys). Accepting null here would
+# let a non-browser client post a shape the contract doesn't define, and give "no note" a second
+# spelling the summary logic would have to handle.
+_NOT_NULL = BeforeValidator(_reject_null)
 
 _SLUG = r"^[a-z0-9_]+$"
 
@@ -47,6 +79,17 @@ TrackingDegradedReason = Literal[
     "low_visibility", "out_of_frame", "low_light", "unsupported_view", "no_person", "slow_device"
 ]
 SkipReason = Literal["no_equipment", "too_difficult", "discomfort", "no_time", "other"]
+
+# zod `.optional()` fields: omit or give a value, never null (see _reject_null).
+OptionalDifficulty = Annotated[Difficulty | None, _NOT_NULL, _OmittedNotNull()]
+OptionalNote = Annotated[Note | None, _NOT_NULL, _OmittedNotNull()]
+OptionalSkipReason = Annotated[SkipReason | None, _NOT_NULL, _OmittedNotNull()]
+OptionalLoggedReps = Annotated[
+    Annotated[int, Field(gt=0, le=1000)] | None, _NOT_NULL, _OmittedNotNull()
+]
+OptionalLoggedSeconds = Annotated[
+    Annotated[int, Field(gt=0, le=3600)] | None, _NOT_NULL, _OmittedNotNull()
+]
 
 
 class _Strict(BaseModel):
@@ -79,7 +122,9 @@ class FeedbackShownEvent(_EventBase):
 
     @model_validator(mode="after")
     def _traces_to_a_declared_rule(self) -> Self:
-        violation = cue_rule_violation(self.rule_id, self.exercise_id, self.measurements)
+        violation = cue_rule_violation(
+            self.rule_id, self.exercise_id, self.measurements, self.ruleset_version
+        )
         if violation:
             raise ValueError(violation)
         return self
@@ -109,8 +154,8 @@ class SetCompletedEvent(_EventBase):
     type: Literal["set_completed"]
     set_index: SetIndex
     reps: int = Field(ge=0, le=1000)
-    perceived_difficulty: Difficulty | None = None
-    note: Note | None = None
+    perceived_difficulty: OptionalDifficulty = None
+    note: OptionalNote = None
 
 
 class SetLoggedEvent(_EventBase):
@@ -118,10 +163,10 @@ class SetLoggedEvent(_EventBase):
 
     type: Literal["set_logged"]
     set_index: SetIndex
-    reps: int | None = Field(default=None, gt=0, le=1000)
-    duration_s: int | None = Field(default=None, gt=0, le=3600)
-    perceived_difficulty: Difficulty | None = None
-    note: Note | None = None
+    reps: OptionalLoggedReps = None
+    duration_s: OptionalLoggedSeconds = None
+    perceived_difficulty: OptionalDifficulty = None
+    note: OptionalNote = None
 
     @model_validator(mode="after")
     def _exactly_one_measure(self) -> Self:
@@ -132,7 +177,7 @@ class SetLoggedEvent(_EventBase):
 
 class ExerciseSkippedEvent(_EventBase):
     type: Literal["exercise_skipped"]
-    reason: SkipReason | None = None
+    reason: OptionalSkipReason = None
 
 
 SessionEvent = Annotated[

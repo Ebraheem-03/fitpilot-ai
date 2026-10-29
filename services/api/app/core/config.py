@@ -19,10 +19,21 @@ class Settings(BaseSettings):
     )
 
     # ADR-0006: zero-cost default. Tests/CI use the "fake" provider; budget 0 blocks paid calls.
-    llm_provider: str = "groq"
+    llm_provider: str = "groq"  # groq | fake | ollama (app/services/llm/factory.py)
     llm_model: str = "openai/gpt-oss-120b"
     llm_monthly_budget_usd: float = 0.0
     groq_api_key: str | None = None
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    ollama_base_url: str = "http://localhost:11434/v1"
+    # ADR-0006 §3 call settings for structured generation.
+    llm_reasoning_effort: str = "low"
+    llm_max_completion_tokens: int = 6000
+    llm_timeout_s: float = 60.0
+    # A 429 whose retry-after is at most this is retried once in-request; longer (the daily cap)
+    # fails fast as "coach is busy".
+    llm_max_retry_wait_s: float = 10.0
+    # Tokens per UTC day this process may spend (Groq free tier: 200K TPD per model). 0 = no cap.
+    llm_daily_token_budget: int = 180_000
 
     @property
     def cors_origin_list(self) -> list[str]:

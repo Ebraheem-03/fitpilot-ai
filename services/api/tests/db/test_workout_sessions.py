@@ -7,8 +7,16 @@ from sqlalchemy import func, select
 from sqlalchemy import table as sa_table
 from sqlalchemy.orm import Session
 
-from app.models import Gym, GymMembership, MembershipStatus, SessionEventRow, WorkoutSession
+from app.models import (
+    Gym,
+    GymMembership,
+    MembershipStatus,
+    PlanStatus,
+    SessionEventRow,
+    WorkoutSession,
+)
 from tests.auth_helpers import bearer
+from tests.db.plan_helpers import seed_plan, sub_of
 from tests.db.session_helpers import SESSIONS, member, rep, send, set_completed, start
 
 
@@ -132,13 +140,46 @@ def test_start_accepts_no_body_at_all(api: TestClient) -> None:
     assert api.post(SESSIONS, headers=member(api)).status_code == 201
 
 
-def test_start_with_a_plan_reference(api: TestClient) -> None:
-    plan = str(uuid.uuid4())
-    r = api.post(
-        SESSIONS, json={"training_plan_id": plan, "plan_day_index": 2}, headers=member(api)
-    )
+def test_start_with_a_plan_reference(api: TestClient, db: Session) -> None:
+    h = member(api)
+    plan = str(seed_plan(db, sub_of(h)).id)
+    r = api.post(SESSIONS, json={"training_plan_id": plan, "plan_day_index": 2}, headers=h)
     assert r.status_code == 201
     assert (r.json()["training_plan_id"], r.json()["plan_day_index"]) == (plan, 2)
+
+
+def test_another_members_plan_is_not_found(api: TestClient, db: Session) -> None:
+    owner, other = member(api), member(api)
+    theirs = str(seed_plan(db, sub_of(owner)).id)
+    for plan in (theirs, str(uuid.uuid4())):
+        r = api.post(SESSIONS, json={"training_plan_id": plan, "plan_day_index": 0}, headers=other)
+        assert r.status_code == 404
+        assert r.json()["detail"]["code"] == "plan_not_found"
+    assert api.get(SESSIONS, headers=other).json()["total"] == 0
+
+
+def test_plan_day_must_be_a_day_of_that_plan(api: TestClient, db: Session) -> None:
+    h = member(api)
+    plan = str(seed_plan(db, sub_of(h), days=2).id)
+    ok = api.post(SESSIONS, json={"training_plan_id": plan, "plan_day_index": 1}, headers=h)
+    assert ok.status_code == 201
+    r = api.post(SESSIONS, json={"training_plan_id": plan, "plan_day_index": 2}, headers=h)
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "plan_day_out_of_range"
+
+
+def test_a_plan_in_review_has_no_days_to_start(api: TestClient, db: Session) -> None:
+    h = member(api)
+    plan = str(seed_plan(db, sub_of(h), status=PlanStatus.needs_review).id)
+    r = api.post(SESSIONS, json={"training_plan_id": plan, "plan_day_index": 0}, headers=h)
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "plan_day_out_of_range"
+
+
+def test_a_superseded_plan_can_still_be_followed(api: TestClient, db: Session) -> None:
+    h = member(api)
+    plan = str(seed_plan(db, sub_of(h), status=PlanStatus.superseded).id)
+    r = api.post(SESSIONS, json={"training_plan_id": plan, "plan_day_index": 0}, headers=h)
+    assert r.status_code == 201
 
 
 def test_plan_reference_needs_both_fields_in_range(api: TestClient) -> None:

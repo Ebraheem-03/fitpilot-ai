@@ -151,7 +151,12 @@ describe("cue rule declarations and explanations", () => {
     for (const c of done!.cues) {
       // accepted by the session-event contract (declared rule + measurement keys, ADR-0011)
       expect(
-        cueRuleViolation(c.rule_id, "bodyweight_squat", Object.keys(c.measurements)),
+        cueRuleViolation(
+          c.rule_id,
+          "bodyweight_squat",
+          Object.keys(c.measurements),
+          c.ruleset_version,
+        ),
       ).toBeNull();
       const def = SQUAT_RULES.find((r) => r.rule_id === c.rule_id)!;
       expect(c).toMatchObject({

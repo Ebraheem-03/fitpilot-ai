@@ -57,6 +57,14 @@ def start_session(
             "idempotency_key_reuse",
             "This Idempotency-Key was used for a different request",
         ) from e
+    except sessions.PlanNotFound as e:
+        raise _error(status.HTTP_404_NOT_FOUND, "plan_not_found", "Training plan not found") from e
+    except sessions.PlanDayOutOfRange as e:
+        raise _error(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "plan_day_out_of_range",
+            "plan_day_index is not a day of that training plan",
+        ) from e
     if not created:
         response.status_code = status.HTTP_200_OK
     return WorkoutSessionOut.model_validate(session)

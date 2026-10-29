@@ -58,4 +58,10 @@ describe("exercise catalogue content", () => {
       expect(exercise && isTracked(exercise), ruleId).toBe(true);
     }
   });
+
+  it("every declared cue rule carries its exercise's catalogue ruleset_version", () => {
+    for (const [ruleId, rule] of Object.entries(CUE_RULES)) {
+      expect(rule.ruleset_version, ruleId).toBe(byId(rule.exercise_id)?.ruleset_version);
+    }
+  });
 });

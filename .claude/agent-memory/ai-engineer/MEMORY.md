@@ -1,1 +1,1 @@
-- [Worktree verify + live LLM runs](worktree-verify-and-live-llm-runs.md) — make db port clash, guard-safe script runs, Groq daily token budget
+- [Worktree verify + live LLM runs](worktree-verify-and-live-llm-runs.md) — make db port clash, per-worktree test DB, guard-safe script runs, Groq daily token budget

@@ -19,7 +19,7 @@ const feedback = () => ({
   ...base(),
   type: "feedback_shown" as const,
   rule_id: "squat.depth.shallow",
-  ruleset_version: 3,
+  ruleset_version: 4,
   message_id: "squat_depth_shallow_v1",
   measurements: { min_knee_angle_deg: 112 },
   tracking_confidence: 0.9,
@@ -106,6 +106,12 @@ describe("SessionEvent", () => {
       ).toContain('measurements not declared by "squat.depth.shallow": left_knee_x');
     });
 
+    it("rejects a ruleset_version the rule does not belong to", () => {
+      expect(messages({ ...feedback(), ruleset_version: 3 })).toContain(
+        'rule_id "squat.depth.shallow" belongs to ruleset_version 4, not 3',
+      );
+    });
+
     it("rejects inherited property names as rule ids", () => {
       expect(messages({ ...feedback(), rule_id: "constructor.name" })).toContain(
         'unknown rule_id "constructor.name"',
@@ -133,6 +139,20 @@ describe("SessionEvent", () => {
       void _r;
       expect(messages({ ...rest, duration_s: 45 })).toEqual([]);
     });
+  });
+
+  // Optional fields are omitted, never null; the API mirror rejects null the same way
+  // (services/api/tests/test_session_schemas.py::test_optional_fields_reject_null).
+  it.each([
+    ["exercise_skipped", "reason"],
+    ["set_completed", "perceived_difficulty"],
+    ["set_completed", "note"],
+    ["set_logged", "perceived_difficulty"],
+    ["set_logged", "note"],
+    ["set_logged", "duration_s"],
+  ])("%s rejects an explicit null %s", (type, field) => {
+    expect(messages(valid[type])).toEqual([]);
+    expect(messages({ ...valid[type], [field]: null })).not.toEqual([]);
   });
 
   it("bounds notes and difficulty", () => {
@@ -189,7 +209,7 @@ describe("SessionSummary", () => {
         cues: [
           {
             rule_id: "squat.depth.shallow",
-            ruleset_version: 3,
+            ruleset_version: 4,
             message_id: "squat_depth_shallow_v1",
             shown_at: "2026-10-29T10:05:00Z",
             measurements: { min_knee_angle_deg: 112 },

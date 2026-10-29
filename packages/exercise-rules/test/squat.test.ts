@@ -61,7 +61,12 @@ describe("SquatAnalyzer", () => {
     expect(cues.length).toBeGreaterThan(0);
     for (const cue of cues) {
       expect(
-        cueRuleViolation(cue.rule_id, "bodyweight_squat", Object.keys(cue.measurements)),
+        cueRuleViolation(
+          cue.rule_id,
+          "bodyweight_squat",
+          Object.keys(cue.measurements),
+          cue.ruleset_version,
+        ),
       ).toBeNull();
     }
   });

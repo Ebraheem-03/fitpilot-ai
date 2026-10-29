@@ -2,6 +2,7 @@
 
 from app.models.base import Base
 from app.models.gym import Gym, GymMembership, MembershipStatus
+from app.models.plan import PlannedExerciseRecord, PlanStatus, TrainingPlanRecord, Weekday
 from app.models.profile import ExperienceLevel, Goal, MemberProfile
 from app.models.session import (
     PerformanceRecord,
@@ -21,11 +22,15 @@ __all__ = [
     "MemberProfile",
     "MembershipStatus",
     "PerformanceRecord",
+    "PlanStatus",
+    "PlannedExerciseRecord",
     "SessionEventRow",
     "SessionEventType",
     "SessionStatus",
+    "TrainingPlanRecord",
     "User",
     "UserRole",
     "UserStatus",
+    "Weekday",
     "WorkoutSession",
 ]

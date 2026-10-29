@@ -68,6 +68,7 @@ export const FeedbackShownEvent = z
       event.rule_id,
       event.exercise_id,
       Object.keys(event.measurements),
+      event.ruleset_version,
     );
     if (violation) ctx.addIssue({ code: "custom", message: violation, path: ["measurements"] });
   });
