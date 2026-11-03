@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { hasCurrentTrackingConsent } from "@/lib/api-types";
+import { TrackingConsentSetting } from "@/features/workouts/TrackingConsentSetting";
 import { getMyProfile } from "@/lib/api";
 import { EQUIPMENT_LABELS, EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile-labels";
 
@@ -25,14 +27,17 @@ async function ProfileDetails() {
     ],
   ];
   return (
-    <dl data-testid="profile" className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3">
-      {rows.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-muted">{term}</dt>
-          <dd className="font-medium">{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl data-testid="profile" className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3">
+        {rows.map(([term, value]) => (
+          <div key={term} className="contents">
+            <dt className="text-muted">{term}</dt>
+            <dd className="font-medium">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <TrackingConsentSetting consented={hasCurrentTrackingConsent(profile)} />
+    </>
   );
 }
 

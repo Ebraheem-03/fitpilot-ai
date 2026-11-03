@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { SignOutButton } from "@/features/auth/SignOutButton";
+import { OutboxBoot } from "@/features/workouts/outbox/OutboxBoot";
 import { AppNav } from "@/features/shell/AppNav";
 import { getMe } from "@/lib/api";
 
@@ -9,6 +10,21 @@ async function RoleNav() {
   await connection();
   const me = await getMe();
   return <AppNav role={me.role} />;
+}
+
+/**
+ * Sign-out and the outbox boot both need the member's id: each member has their own on-device
+ * outbox (a shared device never sends one member's events with another's token).
+ */
+async function SessionControls() {
+  await connection();
+  const me = await getMe();
+  return (
+    <>
+      <OutboxBoot userId={me.id} />
+      <SignOutButton userId={me.id} />
+    </>
+  );
 }
 
 export default function AppLayout({ children }: LayoutProps<"/app">) {
@@ -30,7 +46,9 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
               <RoleNav />
             </Suspense>
           </div>
-          <SignOutButton />
+          <Suspense fallback={<SignOutButton />}>
+            <SessionControls />
+          </Suspense>
         </div>
       </header>
       <main id="content" tabIndex={-1} className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
