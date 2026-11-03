@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 API_ROOT = Path(__file__).resolve().parents[2]
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -353,7 +353,7 @@ def _parse_duration(value: str) -> float:
 
 def call_groq(
     client: httpx.Client,
-    key: str,
+    key: SecretStr,
     model: str,
     messages: list[dict[str, str]],
     pacer: Pacer,
@@ -374,7 +374,9 @@ def call_groq(
     rate_limited = 0
     for attempt in range(8):
         t0 = time.perf_counter()
-        resp = client.post(GROQ_URL, json=body, headers={"Authorization": f"Bearer {key}"})
+        resp = client.post(
+            GROQ_URL, json=body, headers={"Authorization": f"Bearer {key.get_secret_value()}"}
+        )
         latency = time.perf_counter() - t0
         if resp.status_code == 429:
             rate_limited += 1
@@ -419,7 +421,7 @@ def repair_message(errors: list[str]) -> str:
 
 def run_one(
     client: httpx.Client,
-    key: str,
+    key: SecretStr,
     model: str,
     p: Profile,
     run: int,
@@ -472,7 +474,7 @@ def run_one(
 
 def worker(
     model: str,
-    key: str,
+    key: SecretStr,
     runs: int,
     out: Path,
     lock: threading.Lock,

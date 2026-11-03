@@ -6,11 +6,13 @@ rejected draft's exercises (if it parsed) for trainer review (M5); the member AP
 """
 
 import uuid
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -120,3 +122,20 @@ class PlannedExerciseRecord(Base):
     progression: Mapped[str] = mapped_column(String(200))
 
     plan: Mapped[TrainingPlanRecord] = relationship(back_populates="exercises")
+
+
+class PlanGenerationClaim(Base):
+    """An in-flight plan generation (migration 0005). One row per member: the primary key is the
+    "one generation at a time" rule. Deleted when the generation ends; a claim older than the
+    stale timeout may be taken over, so a crashed worker never leaves a permanent lock."""
+
+    __tablename__ = "plan_generation_claims"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    # the Idempotency-Key of the request holding the claim
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    claimed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("clock_timestamp()")
+    )

@@ -62,6 +62,9 @@ def generate_plan(
     202: the generator couldn't produce a valid plan after one repair; saved as `needs_review`
     with its issues, and the current plan stays active.
     200: the same Idempotency-Key was used before; that plan is returned, nothing is generated.
+    The original plan is replayed whatever the profile says now: to plan from an updated
+    profile, send a new key.
+    409 `generation_in_progress`: another generation for this member is running; retry later.
     """
     try:
         result = plans.generate_for_member(db, user, idempotency_key, llm)

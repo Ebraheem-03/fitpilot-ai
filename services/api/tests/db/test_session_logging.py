@@ -62,6 +62,25 @@ def test_ingestion_logs_counts_and_types_only(
         assert event_["idempotency_key"] not in out
 
 
+def test_conflicting_duplicates_are_logged_as_a_count_never_a_payload(
+    api: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    h = member(api)
+    sid = start(api, h)
+    caplog.set_level(logging.DEBUG)
+    send(api, h, sid, [set_completed(sid, 0, 2, key="conflict-log-01", note="first secret note")])
+    send(api, h, sid, [set_completed(sid, 0, 2, key="conflict-log-01", note="second secret note")])
+
+    first, second = named(caplog, "session.events_ingested")
+    assert (first["duplicates"], first["conflicting_duplicates"]) == (0, 0)
+    assert (second["accepted"], second["duplicates"], second["conflicting_duplicates"]) == (0, 1, 1)
+    (warning,) = named(caplog, "session.events_conflicting_duplicates")
+    assert warning["session_id"] == sid and warning["count"] == 1
+    out = raw_output(caplog)
+    for secret in ("first secret note", "second secret note", "conflict-log-01"):
+        assert secret not in out
+
+
 def test_rejections_log_the_reason_code_not_the_content(
     api: TestClient, caplog: pytest.LogCaptureFixture
 ) -> None:

@@ -1,0 +1,3 @@
+# Prompt files are hashed (prompt_sha256) and the hash is checked against a live eval report:
+# keep them LF on every platform.
+*.md text eol=lf

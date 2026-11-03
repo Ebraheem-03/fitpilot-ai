@@ -9,6 +9,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import get_db
 from app.main import app
 from tests.auth_helpers import SUPABASE_URL, FakeJWKSClient
+from tests.db.concurrency_helpers import live  # noqa: F401  (fixture for test_concurrency.py)
 
 
 @pytest.fixture

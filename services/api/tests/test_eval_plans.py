@@ -432,3 +432,33 @@ def test_prompt_files_have_a_live_eval_report_recording_their_hash() -> None:
     assert f"- prompt_sha256: `{sha}`" in md.read_text(), hint
     live = [r for r in report["runs"] if r["mode"] == "live" and r["prompt_sha256"] == sha]
     assert live, hint
+
+
+# --- the hash is stable across line endings, and sensitive to content.
+
+
+def _copy_prompts(dest: Path, *, eol: bytes) -> None:
+    dest.mkdir()
+    for part in prompts.PARTS:
+        name = f"{prompts.PROMPT_VERSION}.{part}.md"
+        text = (prompts.PROMPT_DIR / name).read_bytes().replace(b"\r\n", b"\n")
+        (dest / name).write_bytes(text.replace(b"\n", eol))
+
+
+def test_prompt_hash_ignores_crlf_checkouts(tmp_path: Path) -> None:
+    _copy_prompts(tmp_path / "lf", eol=b"\n")
+    _copy_prompts(tmp_path / "crlf", eol=b"\r\n")
+    crlf = prompts.prompt_sha256(directory=tmp_path / "crlf")
+    assert crlf == prompts.prompt_sha256(directory=tmp_path / "lf") == prompts.prompt_sha256()
+
+
+def test_prompt_hash_still_changes_with_content(tmp_path: Path) -> None:
+    _copy_prompts(tmp_path / "edited", eol=b"\n")
+    system = tmp_path / "edited" / f"{prompts.PROMPT_VERSION}.system.md"
+    system.write_bytes(system.read_bytes() + b"One more rule.\n")
+    assert prompts.prompt_sha256(directory=tmp_path / "edited") != prompts.prompt_sha256()
+
+
+def test_prompt_files_are_pinned_to_lf_by_gitattributes() -> None:
+    attrs = (prompts.PROMPT_DIR / ".gitattributes").read_text()
+    assert "*.md text eol=lf" in attrs.splitlines()

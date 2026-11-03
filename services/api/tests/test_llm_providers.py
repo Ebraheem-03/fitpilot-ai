@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from app.core.config import Settings
 from app.services.llm import CompletionRequest, FakeProvider, build_client, build_provider
@@ -35,7 +36,7 @@ def provider(
     p = OpenAICompatibleProvider(
         "groq" if groq else "ollama",
         "https://llm.test/openai/v1/",
-        key,
+        SecretStr(key) if key else None,
         timeout_s=5,
         groq_extensions=groq,
         transport=httpx.MockTransport(record),
