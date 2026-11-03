@@ -24,6 +24,7 @@ import logging
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import cast
 
 from sqlalchemy.exc import IntegrityError
@@ -81,6 +82,15 @@ def generate_for_member(
     user_id = user.id
 
     # Phase 1, short transaction: replay, preconditions, claim the member's generation slot.
+    #
+    # ORDER MATTERS, do not reorder: replay-check -> claim -> replay-check.
+    # - The first check answers a retry without needing the slot (and before any profile check).
+    # - The claim is the only thing that serialises generations for the member.
+    # - The second check, made after the claim is ours, closes the window in which a competitor
+    #   finished (saved its plan and dropped its claim in one transaction) between our first check
+    #   and our claim. Without it we would call the LLM a second time for the same key. It is exact
+    #   only because it runs after the claim: our claim cannot be granted until that competitor's
+    #   transaction has committed, so its plan is then visible.
     existing = repo.get_by_idempotency_key(db, user_id, idempotency_key)
     if existing is not None:
         return _replayed(existing)
@@ -89,15 +99,14 @@ def generate_for_member(
         db.rollback()
         raise ProfileRequired
     inputs = PlanInputs.from_profile(profile)
-    if not repo.try_claim_generation(db, user_id, idempotency_key):
+    claimed_at = repo.try_claim_generation(db, user_id, idempotency_key)
+    if claimed_at is None:
         db.rollback()
         log_event(logger, "plan.generation_rejected", logging.WARNING, reason="in_progress")
         raise GenerationInProgress
-    # A competitor may have finished between the check above and our claim (it saves and drops
-    # its claim in one transaction): its plan is the answer, and no LLM call is made.
     finished = repo.get_by_idempotency_key(db, user_id, idempotency_key)
     if finished is not None:
-        repo.release_claim(db, user_id, idempotency_key)
+        repo.release_claim(db, user_id, idempotency_key, claimed_at)
         db.commit()
         return _replayed(finished)
     db.commit()  # the claim is now visible; no transaction or connection is held past here
@@ -106,7 +115,7 @@ def generate_for_member(
     try:
         draft = generate_plan(inputs, catalogue or load_catalog(), client)
     except (LLMBusy, LLMUnavailable) as e:
-        _release_claim(db, user_id, idempotency_key)
+        _release_claim(db, user_id, idempotency_key, claimed_at)
         log_event(
             logger,
             "plan.generation_failed",
@@ -118,11 +127,11 @@ def generate_for_member(
         )
         raise
     except BaseException:
-        _release_claim(db, user_id, idempotency_key)
+        _release_claim(db, user_id, idempotency_key, claimed_at)
         raise
 
     # Phase 3, short transaction: persist the result, supersede the old plan, drop the claim.
-    return _persist(db, user_id, idempotency_key, draft)
+    return _persist(db, user_id, idempotency_key, claimed_at, draft)
 
 
 def _replayed(plan: TrainingPlanRecord) -> Generated:
@@ -130,38 +139,48 @@ def _replayed(plan: TrainingPlanRecord) -> Generated:
     return Generated(plan, replayed=True)
 
 
-def _release_claim(db: Session, user_id: uuid.UUID, key: str) -> None:
-    """Best effort: if this fails the claim goes stale and expires on its own."""
+def _release_claim(db: Session, user_id: uuid.UUID, key: str, claimed_at: datetime) -> None:
+    """Best effort, and only this worker's own claim (a takeover's is left alone): if this fails
+    the claim goes stale and expires on its own."""
     try:
         db.rollback()
-        repo.release_claim(db, user_id, key)
+        repo.release_claim(db, user_id, key, claimed_at)
         db.commit()
     except Exception:
         db.rollback()
         log_event(logger, "plan.claim_release_failed", logging.ERROR)
 
 
-def _persist(db: Session, user_id: uuid.UUID, key: str, draft: PlanDraft) -> Generated:
-    if not repo.lock_own_claim(db, user_id, key):
-        # We overran the stale timeout and another generation took the slot over. Saving now
-        # could interleave versions with theirs, so this result is dropped; if they were
-        # retrying the same key, their plan is the answer.
-        db.rollback()
-        winner = repo.get_by_idempotency_key(db, user_id, key)
-        if winner is not None:
-            return _replayed(winner)
-        log_event(logger, "plan.claim_lost", logging.WARNING)
-        raise GenerationInProgress
-    record = _save(db, user_id, key, draft)
-    repo.release_claim(db, user_id, key)
+def _persist(
+    db: Session, user_id: uuid.UUID, key: str, claimed_at: datetime, draft: PlanDraft
+) -> Generated:
     try:
+        if not repo.lock_own_claim(db, user_id, key, claimed_at):
+            # We overran the stale timeout and another generation took the slot over (even with
+            # the same key). Saving now could interleave versions with theirs, so this result is
+            # dropped; if they were retrying the same key and have finished, their plan is the
+            # answer. Their claim is not ours to release.
+            db.rollback()
+            winner = repo.get_by_idempotency_key(db, user_id, key)
+            if winner is not None:
+                return _replayed(winner)
+            log_event(logger, "plan.claim_lost", logging.WARNING)
+            raise GenerationInProgress
+        record = _save(db, user_id, key, draft)
+        repo.release_claim(db, user_id, key, claimed_at)
         db.commit()
-    except IntegrityError:  # unreachable while the claim holds; the constraints are the backstop
-        db.rollback()
-        winner = repo.get_by_idempotency_key(db, user_id, key)
-        if winner is None:
-            raise
-        return _replayed(winner)
+    except GenerationInProgress:
+        raise
+    except BaseException as e:
+        # Any failure while saving (a constraint, a dropped connection, a bug) must not leave our
+        # claim blocking the member's retries until it goes stale.
+        _release_claim(db, user_id, key, claimed_at)
+        if isinstance(e, IntegrityError):
+            # unreachable while the claim holds; the constraints are the backstop
+            winner = repo.get_by_idempotency_key(db, user_id, key)
+            if winner is not None:
+                return _replayed(winner)
+        raise
     _log_generated(record, draft)
     return Generated(record, replayed=False)
 

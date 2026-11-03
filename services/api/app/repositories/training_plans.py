@@ -2,7 +2,7 @@
 alone, so another member's plan can't be read by guessing its id."""
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import DateTime, delete, func, select, update
@@ -23,14 +23,20 @@ def _now() -> Any:
     return func.clock_timestamp(type_=DateTime(timezone=True))
 
 
+# A claim is identified by (user_id, idempotency_key, claimed_at). The key alone is not enough: a
+# takeover by a retry with the same Idempotency-Key has the same key but a newer `claimed_at`, and
+# the original (slow) worker must neither release nor save under it.
+
+
 def try_claim_generation(
     db: Session,
     user_id: uuid.UUID,
     key: str,
     stale_after: timedelta = CLAIM_STALE_AFTER,
-) -> bool:
-    """Claim the member's one generation slot for `key`. False when another generation holds it
-    and its claim is not stale. Commit to make the claim visible to other requests."""
+) -> datetime | None:
+    """Claim the member's one generation slot for `key`. Returns the claim's `claimed_at` (pass it
+    to `lock_own_claim` / `release_claim`), or None when another generation holds the slot and
+    its claim is not stale. Commit to make the claim visible to other requests."""
     claimed_at = PlanGenerationClaim.claimed_at
     stmt = (
         insert(PlanGenerationClaim)
@@ -40,27 +46,33 @@ def try_claim_generation(
             set_={"idempotency_key": key, "claimed_at": _now()},
             where=claimed_at < _now() - stale_after,
         )
-        .returning(PlanGenerationClaim.user_id)
+        .returning(PlanGenerationClaim.claimed_at)
     )
-    return db.execute(stmt).scalar_one_or_none() is not None
+    return db.execute(stmt).scalar_one_or_none()
 
 
-def lock_own_claim(db: Session, user_id: uuid.UUID, key: str) -> bool:
-    """Lock the claim row if `key` still holds it (not taken over after going stale). Serialises
-    the member's saves until the transaction ends."""
+def lock_own_claim(db: Session, user_id: uuid.UUID, key: str, claimed_at: datetime) -> bool:
+    """Lock the claim row if this exact claim still holds the slot (not taken over after going
+    stale, even by the same key). Serialises the member's saves until the transaction ends."""
     held = db.scalar(
         select(PlanGenerationClaim.user_id)
-        .where(PlanGenerationClaim.user_id == user_id, PlanGenerationClaim.idempotency_key == key)
+        .where(
+            PlanGenerationClaim.user_id == user_id,
+            PlanGenerationClaim.idempotency_key == key,
+            PlanGenerationClaim.claimed_at == claimed_at,
+        )
         .with_for_update()
     )
     return held is not None
 
 
-def release_claim(db: Session, user_id: uuid.UUID, key: str) -> None:
-    """Drop the claim, only if `key` still holds it (never a takeover's claim)."""
+def release_claim(db: Session, user_id: uuid.UUID, key: str, claimed_at: datetime) -> None:
+    """Drop the claim, only if it is still this exact claim (never a takeover's)."""
     db.execute(
         delete(PlanGenerationClaim).where(
-            PlanGenerationClaim.user_id == user_id, PlanGenerationClaim.idempotency_key == key
+            PlanGenerationClaim.user_id == user_id,
+            PlanGenerationClaim.idempotency_key == key,
+            PlanGenerationClaim.claimed_at == claimed_at,
         )
     )
 
