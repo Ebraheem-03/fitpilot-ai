@@ -24,6 +24,9 @@ export interface OutboxOptions {
   maxBatchEvents?: number;
   backoffBaseMs?: number;
   backoffMaxMs?: number;
+  now?: () => number;
+  /** Quarantined events older than this are deleted when the outbox opens. */
+  pruneQuarantinedAfterMs?: number;
 }
 
 export type FlushOutcome = "empty" | "sent" | "held" | "retry_scheduled";
@@ -80,9 +83,15 @@ export class Outbox {
       maxBatchEvents: 100,
       backoffBaseMs: 1_000,
       backoffMaxMs: 60_000,
+      now: () => Date.now(),
+      pruneQuarantinedAfterMs: 7 * 24 * 3600 * 1000,
       ...options,
     };
     this.seq = Date.now() * 1000;
+    // On open: forget events parked long ago. Part of the chain, so nothing sends before it.
+    this.chain = this.o.store
+      .pruneQuarantined(this.o.now() - this.o.pruneQuarantinedAfterMs)
+      .catch(() => undefined);
   }
 
   async enqueue(events: SessionEvent[]): Promise<void> {
@@ -107,6 +116,22 @@ export class Outbox {
     const wasHeld = this.held;
     this.held = cameraRunning;
     if (wasHeld && !cameraRunning) void this.flush();
+  }
+
+  /**
+   * Called before the camera starts: blocks new sends, then waits for a flush already in flight
+   * to settle, so nothing is on the wire once the camera is on. Release with `holdWhile(false)`
+   * (the camera UI does, when the camera isn't running).
+   */
+  async idle(): Promise<void> {
+    this.held = true;
+    await this.chain;
+  }
+
+  /** Stops the retry timer (the member signed out or changed). */
+  dispose(): void {
+    this.cancelRetry?.();
+    this.cancelRetry = null;
   }
 
   get isHeld(): boolean {
@@ -190,7 +215,9 @@ export class Outbox {
           dropped: tracked.length,
         });
         if (!tracked.length) {
-          await store.quarantine(keys, "tracking_consent_required"); // can't happen; never loop
+          // A batch with no tracked events can't need consent: don't loop on it, and don't keep
+          // the manual events forever either (the quarantine is pruned after a week).
+          await store.quarantine(keys, "unexpected_consent_required", this.o.now());
         } else {
           await store.remove(tracked.map((r) => r.key));
         }
@@ -208,6 +235,7 @@ export class Outbox {
         await store.quarantine(
           quarantine.map((r) => r.key),
           "invalid_events",
+          this.o.now(),
         );
         return "done";
       }
@@ -215,7 +243,7 @@ export class Outbox {
       case "event_limit_reached": {
         const left = (await store.pending(sessionId)).map((r) => r.key);
         this.o.log(`outbox: ${result.kind}, quarantined events`, { count: left.length });
-        await store.quarantine(left, result.kind);
+        await store.quarantine(left, result.kind, this.o.now());
         return "done";
       }
     }

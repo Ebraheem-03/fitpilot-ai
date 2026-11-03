@@ -42,6 +42,16 @@ export type ProfileInput = Omit<
 /** The consent copy version this build shows; the API accepts only versions it knows. */
 export const TRACKING_CONSENT_VERSION = 1;
 
+/** Consent counts only if it was given, and for copy at least as new as this build's. */
+export function hasCurrentTrackingConsent(
+  profile: Pick<Profile, "tracking_data_consent_at" | "tracking_data_consent_version"> | null,
+): boolean {
+  return (
+    profile?.tracking_data_consent_at != null &&
+    (profile.tracking_data_consent_version ?? 0) >= TRACKING_CONSENT_VERSION
+  );
+}
+
 export type SessionStatus = "started" | "completed";
 export type WorkoutSessionBrief = {
   id: string;

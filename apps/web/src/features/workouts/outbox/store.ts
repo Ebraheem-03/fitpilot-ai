@@ -11,6 +11,8 @@ export interface OutboxRecord {
   state: "pending" | "quarantined";
   /** why it was quarantined: a code, never event values */
   reason?: string;
+  /** epoch ms; quarantined records are pruned after a week */
+  quarantinedAt?: number;
 }
 
 export interface OutboxStore {
@@ -19,7 +21,9 @@ export interface OutboxStore {
   pending(sessionId?: string): Promise<OutboxRecord[]>;
   quarantined(): Promise<OutboxRecord[]>;
   remove(keys: string[]): Promise<void>;
-  quarantine(keys: string[], reason: string): Promise<void>;
+  quarantine(keys: string[], reason: string, at: number): Promise<void>;
+  /** Deletes quarantined records parked before `cutoff` (epoch ms). */
+  pruneQuarantined(cutoff: number): Promise<void>;
 }
 
 export const byQueueOrder = (a: OutboxRecord, b: OutboxRecord) =>
@@ -41,10 +45,15 @@ export class MemoryStore implements OutboxStore {
   async remove(keys: string[]) {
     for (const k of keys) this.rows.delete(k);
   }
-  async quarantine(keys: string[], reason: string) {
+  async quarantine(keys: string[], reason: string, at: number) {
     for (const k of keys) {
       const r = this.rows.get(k);
-      if (r) this.rows.set(k, { ...r, state: "quarantined", reason });
+      if (r) this.rows.set(k, { ...r, state: "quarantined", reason, quarantinedAt: at });
+    }
+  }
+  async pruneQuarantined(cutoff: number) {
+    for (const [k, r] of this.rows) {
+      if (r.state === "quarantined" && (r.quarantinedAt ?? 0) < cutoff) this.rows.delete(k);
     }
   }
 }
@@ -112,7 +121,13 @@ export class IndexedDbStore implements OutboxStore {
     for (const k of keys) tx.objectStore(STORE).delete(k);
     await txDone(tx);
   }
-  async quarantine(keys: string[], reason: string) {
+  async pruneQuarantined(cutoff: number) {
+    const stale = (await this.all())
+      .filter((r) => r.state === "quarantined" && (r.quarantinedAt ?? 0) < cutoff)
+      .map((r) => r.key);
+    if (stale.length) await this.remove(stale);
+  }
+  async quarantine(keys: string[], reason: string, at: number) {
     const db = await this.open();
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
@@ -120,7 +135,7 @@ export class IndexedDbStore implements OutboxStore {
       const req = store.get(k);
       req.onsuccess = () => {
         const r = req.result as OutboxRecord | undefined;
-        if (r) store.put({ ...r, state: "quarantined", reason });
+        if (r) store.put({ ...r, state: "quarantined", reason, quarantinedAt: at });
       };
     }
     await txDone(tx);

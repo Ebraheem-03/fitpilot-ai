@@ -156,6 +156,59 @@ test("a tracked set with a session sends nothing while the camera runs, then sav
   expect(during).toEqual([]);
 });
 
+test("stop then Start again at once: the camera waits for the slow upload, so nothing is on the wire while it runs", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await signUp(page);
+  await completeOnboarding(page);
+  const id = await startHarnessSession(page);
+  await page.goto(`/app/exercises/bodyweight_squat/live?session=${id}`);
+  await page.getByRole("button", { name: "Save my tracking data" }).click();
+  await expect(page.getByTestId("tracking-consent")).toBeHidden();
+
+  // A slow API: every event upload takes 2 s to be answered.
+  await page.route("**/*", async (route) => {
+    if (!isEventUpload(route.request())) return route.continue();
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await route.continue();
+  });
+  const uploads: { startedAt: number; answeredAt: number | null }[] = [];
+  page.on("request", (r) => {
+    if (isEventUpload(r)) uploads.push({ startedAt: Date.now(), answeredAt: null });
+  });
+  page.on("response", (res) => {
+    if (isEventUpload(res.request())) uploads.at(-1)!.answeredAt = Date.now();
+  });
+  // The page records when the camera session leaves "stopped" the second time.
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>("[data-testid=live-coach]")!;
+    let stopped = false;
+    new MutationObserver(() => {
+      const s = el.dataset.session;
+      if (s === "stopped") stopped = true;
+      else if (stopped && !(window as { __restartAt?: number }).__restartAt) {
+        (window as { __restartAt?: number }).__restartAt = Date.now();
+      }
+    }).observe(el, { attributes: true, attributeFilter: ["data-session"] });
+  });
+
+  const coach = page.getByTestId("live-coach").filter({ visible: true });
+  await page.getByRole("button", { name: "Start camera" }).click();
+  await expect(coach).toHaveAttribute("data-session", "running", { timeout: 60_000 });
+  await page.getByRole("button", { name: "Stop camera" }).click();
+  await page.getByRole("button", { name: "Start again" }).click(); // straight away
+  await expect(coach).toHaveAttribute("data-session", "running", { timeout: 60_000 });
+
+  const restartAt = await page.evaluate(() => (window as { __restartAt?: number }).__restartAt!);
+  expect(uploads).toHaveLength(1); // the first set's upload, started when the camera stopped
+  expect(uploads[0]!.startedAt).toBeLessThan(restartAt);
+  expect(uploads[0]!.answeredAt).not.toBeNull();
+  expect(uploads[0]!.answeredAt!).toBeLessThanOrEqual(restartAt); // answered before the camera came back
+  await page.getByRole("button", { name: "Stop camera" }).click();
+  await expect.poll(() => uploads.length).toBe(2);
+});
+
 test("declining keeps tracking available without saving, and practice mode never asks", async ({
   page,
 }) => {

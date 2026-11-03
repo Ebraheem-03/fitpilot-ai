@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { hasCurrentTrackingConsent } from "@/lib/api-types";
 import { TrackingConsentSetting } from "@/features/workouts/TrackingConsentSetting";
 import { getMyProfile } from "@/lib/api";
 import { EQUIPMENT_LABELS, EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile-labels";
@@ -35,7 +36,7 @@ async function ProfileDetails() {
           </div>
         ))}
       </dl>
-      <TrackingConsentSetting consentedAt={profile.tracking_data_consent_at} />
+      <TrackingConsentSetting consented={hasCurrentTrackingConsent(profile)} />
     </>
   );
 }

@@ -37,6 +37,8 @@ export interface LiveCoachProps {
    * for the post-set summary and stay on this page.
    */
   sessionId?: string;
+  /** The signed-in member: events queue in their own on-device outbox (never another member's). */
+  userId?: string;
   /**
    * Receives each batch of recorded events, only with a `sessionId` (S7: the on-device outbox,
    * flushed after the camera stops; ADR-0011). Nothing in this component sends anything.
@@ -67,6 +69,8 @@ const IDLE: EngineSnapshot = {
 const MEDICAL_NOTICE =
   "Coaching, not medical advice — stop if anything hurts, and talk to a qualified professional about pain or injury.";
 const noop = () => () => {};
+const isCameraActive = (status: string) =>
+  status === "running" || status === "paused" || status === "loading" || status === "requesting";
 const button =
   "rounded-md border border-border px-4 py-2 font-medium hover:bg-surface disabled:opacity-50";
 const primary =
@@ -82,6 +86,7 @@ const primary =
 export function LiveCoach({
   exercise,
   sessionId,
+  userId,
   sink,
   trackingConsent = false,
   targetReps,
@@ -118,6 +123,13 @@ export function LiveCoach({
     const video = videoRef.current!;
     const create = analyzerFor(exercise.id)!;
     const required = requiredKey.split(",") as LandmarkName[];
+    const outboxSink =
+      sessionId !== undefined && userId !== undefined
+        ? createEventSink({
+            outbox: getOutbox(userId),
+            hasConsent: () => consentRef.current === "granted",
+          })
+        : null;
     const recorder = new SessionRecorder({
       exerciseId: exercise.id,
       sessionId,
@@ -126,13 +138,9 @@ export function LiveCoach({
         // With a session, events wait in the on-device outbox (ADR-0011): enqueue only; the
         // outbox is held while the camera runs and flushes after it stops. Without consent the
         // tracked events are dropped here.
-        if (sessionId !== undefined) outboxSink(events);
+        outboxSink?.(events);
       },
       firstSetIndex: setIndex,
-    });
-    const outboxSink = createEventSink({
-      outbox: getOutbox(),
-      hasConsent: () => consentRef.current === "granted",
     });
     const e = new LiveEngine(browserDeps(video, create), video, required, { recorder });
     setEngine(e);
@@ -140,7 +148,7 @@ export function LiveCoach({
       e.dispose(); // leaving the page always turns the camera off
       delete window.__fitpilotLiveEvents;
     };
-  }, [exercise.id, requiredKey, sessionId, setIndex]);
+  }, [exercise.id, requiredKey, sessionId, userId, setIndex]);
 
   const snap = useSyncExternalStore(
     engine?.subscribe ?? noop,
@@ -150,6 +158,10 @@ export function LiveCoach({
   const { session, tracking, reps, phase, landmarks, events } = snap;
   const live = session.status === "running" || session.status === "paused";
   const cameraOn = live || session.status === "loading";
+  // The hold starts before the camera does ("requesting" is the permission prompt), so nothing
+  // can go out between pressing Start and the camera being on.
+  const holdOutbox = cameraOn || session.status === "requesting";
+  const saving = sessionId !== undefined && userId !== undefined;
   const ended = session.status === "stopped" || session.status === "error";
   const summary = useMemo(() => (ended ? summariseSet(events) : null), [ended, events]);
   const reportedSet = useRef<string | null>(null);
@@ -163,8 +175,8 @@ export function LiveCoach({
     onSetCompleteRef.current?.(summary, events);
     // The set is over and the camera is off (stop, or it failed): send what it recorded. The
     // outbox is still held for a render at most; releasing it flushes too, and repeats are no-ops.
-    if (sessionId !== undefined) void getOutbox().flush(sessionId);
-  }, [summary, events, sessionId]);
+    if (saving) void getOutbox(userId).flush(sessionId);
+  }, [summary, events, sessionId, userId, saving]);
 
   // e2e only (tests/e2e/live-cues.spec.ts): the current set's practice-mode events, readable by
   // the test in the page. Never in a production build, never for a real session.
@@ -180,13 +192,25 @@ export function LiveCoach({
   // Nothing is sent while the camera is on; when it stops (or the page is left) the outbox flushes
   // the set (ADR-0011 §2).
   useEffect(() => {
-    if (!sessionId) return;
-    getOutbox().holdWhile(cameraOn);
-  }, [sessionId, cameraOn]);
+    if (!saving) return;
+    getOutbox(userId).holdWhile(holdOutbox);
+  }, [saving, userId, holdOutbox]);
   useEffect(() => {
-    if (!sessionId) return;
-    return () => getOutbox().holdWhile(false);
-  }, [sessionId]);
+    if (!saving) return;
+    return () => getOutbox(userId).holdWhile(false);
+  }, [saving, userId]);
+
+  // Start: first wait out an upload that is already in flight (a set that just ended), so the
+  // camera is never on while a request is on the wire (ADR-0011 §2).
+  async function startCamera() {
+    if (!engine) return;
+    if (saving) await getOutbox(userId).idle();
+    await engine.start();
+    // A start that didn't turn the camera on (blocked, failed): let the outbox send again.
+    if (saving && !isCameraActive(engine.getSnapshot().session.status)) {
+      getOutbox(userId).holdWhile(false);
+    }
+  }
 
   // The control the member used disappears when the panel changes: move focus to where the
   // next action is, but never steal it from somewhere they've moved to themselves.
@@ -276,7 +300,7 @@ export function LiveCoach({
               type="button"
               className={primary}
               disabled={!engine || session.status === "requesting" || consentPending}
-              onClick={() => void engine?.start()}
+              onClick={() => void startCamera()}
             >
               {session.status === "requesting" ? "Waiting for permission…" : "Start camera"}
             </button>
@@ -300,7 +324,7 @@ export function LiveCoach({
           {summary && <SetSummaryView summary={summary} targetReps={targetReps} />}
           <div className="flex flex-wrap items-center gap-3">
             {session.retryable && (
-              <button type="button" className={primary} onClick={() => void engine?.start()}>
+              <button type="button" className={primary} onClick={() => void startCamera()}>
                 Try again
               </button>
             )}
@@ -328,7 +352,7 @@ export function LiveCoach({
             </p>
           )}
           <div>
-            <button type="button" className={primary} onClick={() => void engine?.start()}>
+            <button type="button" className={primary} onClick={() => void startCamera()}>
               Start again
             </button>
           </div>

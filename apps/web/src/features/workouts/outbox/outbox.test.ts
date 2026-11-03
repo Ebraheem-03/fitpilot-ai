@@ -296,3 +296,98 @@ describe("event sink (consent)", () => {
     expect(h.sent).toHaveLength(0);
   });
 });
+
+describe("outbox: idle() before the camera starts", () => {
+  const settle = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+
+  it("resolves only after the send in flight settles, and nothing starts after it", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const h = harness(async () => {
+      await gate;
+      return { ok: true };
+    });
+    await h.outbox.enqueue([rep(0)]);
+    const flushing = h.outbox.flush();
+    await vi.waitFor(() => expect(h.sent).toHaveLength(1)); // on the wire now
+
+    let idled = false;
+    const idle = h.outbox.idle().then(() => (idled = true));
+    await settle();
+    expect(idled).toBe(false); // the request has not come back yet
+
+    release();
+    await idle;
+    expect(idled).toBe(true);
+    expect(await h.outbox.pendingCount()).toBe(0);
+
+    await h.outbox.enqueue([rep(1)]);
+    expect(await h.outbox.flush()).toBe("held");
+    expect(h.sent).toHaveLength(1); // nothing new is sent while held
+    await flushing;
+  });
+
+  it("does not start the next batch of a flush that was running", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const h = harness(
+      async (_c, i) => {
+        if (i === 0) await gate;
+        return { ok: true };
+      },
+      new MemoryStore(),
+      { maxBatchEvents: 1 },
+    );
+    await h.outbox.enqueue([rep(0), rep(1), rep(2)]);
+    void h.outbox.flush();
+    await vi.waitFor(() => expect(h.sent).toHaveLength(1));
+    const idle = h.outbox.idle();
+    release();
+    await idle;
+    await settle();
+    expect(h.sent).toHaveLength(1);
+    expect(await h.outbox.pendingCount()).toBe(2);
+  });
+});
+
+describe("outbox: quarantine housekeeping", () => {
+  const DAY = 24 * 3600 * 1000;
+
+  it("deletes quarantined events older than a week when the outbox opens", async () => {
+    const store = new MemoryStore();
+    const [old, recent] = [rep(0), rep(1)];
+    await store.put(
+      [old, recent].map((event, i) => ({
+        key: event.idempotency_key,
+        sessionId: SESSION,
+        seq: i,
+        occurredAt: event.occurred_at,
+        event,
+        state: "pending" as const,
+      })),
+    );
+    const t0 = 1_700_000_000_000;
+    await store.quarantine([old.idempotency_key], "invalid_events", t0 - 8 * DAY);
+    await store.quarantine([recent.idempotency_key], "invalid_events", t0 - 1 * DAY);
+
+    const h = harness(() => ({ ok: true }), store, { now: () => t0 });
+    expect((await h.outbox.quarantined()).map((r) => r.key)).toEqual([recent.idempotency_key]);
+  });
+
+  it("a consent refusal of a batch with no tracked events is parked, not retried or kept forever", async () => {
+    const h = harness(() => ({ ok: false, kind: "tracking_consent_required" }));
+    const manualOnly = [manual(), manual()];
+    await h.outbox.enqueue(manualOnly);
+    expect(await h.outbox.flush()).toBe("sent");
+    expect(h.sent).toHaveLength(1); // no retry loop
+    const parked = await h.outbox.quarantined();
+    expect(parked.map((r) => r.reason)).toEqual([
+      "unexpected_consent_required",
+      "unexpected_consent_required",
+    ]);
+    expect(parked.every((r) => typeof r.quarantinedAt === "number")).toBe(true);
+    expect(await h.outbox.pendingCount()).toBe(0);
+  });
+});

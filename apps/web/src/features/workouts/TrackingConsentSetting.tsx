@@ -4,7 +4,7 @@ import { useState } from "react";
 import { withdrawTrackingConsent } from "./actions";
 
 /** Profile page: whether tracking data is saved, and a way to stop (ADR-0011 §4). */
-export function TrackingConsentSetting({ consentedAt }: { consentedAt: string | null }) {
+export function TrackingConsentSetting({ consented }: { consented: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export function TrackingConsentSetting({ consentedAt }: { consentedAt: string | 
       <h2 id="tracking-data-heading" className="font-semibold">
         Saving your tracking data
       </h2>
-      {consentedAt ? (
+      {consented ? (
         <>
           <p className="text-sm">
             On. Your rep counts, rep timing, tracking quality and the measurements behind each cue

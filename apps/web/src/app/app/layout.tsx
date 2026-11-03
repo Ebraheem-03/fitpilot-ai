@@ -12,6 +12,21 @@ async function RoleNav() {
   return <AppNav role={me.role} />;
 }
 
+/**
+ * Sign-out and the outbox boot both need the member's id: each member has their own on-device
+ * outbox (a shared device never sends one member's events with another's token).
+ */
+async function SessionControls() {
+  await connection();
+  const me = await getMe();
+  return (
+    <>
+      <OutboxBoot userId={me.id} />
+      <SignOutButton userId={me.id} />
+    </>
+  );
+}
+
 export default function AppLayout({ children }: LayoutProps<"/app">) {
   return (
     <>
@@ -31,10 +46,11 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
               <RoleNav />
             </Suspense>
           </div>
-          <SignOutButton />
+          <Suspense fallback={<SignOutButton />}>
+            <SessionControls />
+          </Suspense>
         </div>
       </header>
-      <OutboxBoot />
       <main id="content" tabIndex={-1} className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
         {children}
       </main>

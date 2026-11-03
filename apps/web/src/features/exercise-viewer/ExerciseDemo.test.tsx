@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ViewerError } from "./compat";
@@ -61,6 +61,10 @@ function setReducedMotion(reduce: boolean) {
 async function renderLoaded() {
   render(<ExerciseDemo exercise={squat} />);
   await screen.findByTestId("scene");
+  // The scene appears at commit; the viewer leaves "loading" only when its passive effect has
+  // reported ready and React has re-rendered. `findBy` can resolve in between on a busy machine
+  // (the CI flake), so wait for the state the tests rely on instead of assuming it.
+  await waitFor(() => expect(viewer().dataset.status).not.toBe("loading"));
 }
 
 beforeEach(() => {

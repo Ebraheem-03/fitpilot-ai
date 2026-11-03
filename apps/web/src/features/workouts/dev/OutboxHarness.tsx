@@ -11,16 +11,16 @@ import { getOutbox } from "../outbox/browser";
  * "offline mid-workout, reload, reconnect, stored once" uses it until the workout runner (M3 S8)
  * offers the same flow to members.
  */
-export function OutboxHarness({ sessionId }: { sessionId: string | null }) {
+export function OutboxHarness({ sessionId, userId }: { sessionId: string | null; userId: string }) {
   const router = useRouter();
   const [pending, setPending] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [summary, setSummary] = useState<SessionSummary | null>(null);
 
   const refresh = () => {
-    if (sessionId) void getOutbox().pendingCount(sessionId).then(setPending);
+    if (sessionId) void getOutbox(userId).pendingCount(sessionId).then(setPending);
   };
-  useEffect(refresh, [sessionId]);
+  useEffect(refresh, [sessionId, userId]);
 
   async function start() {
     const res = await startSession(`dev-start-${crypto.randomUUID()}`);
@@ -39,19 +39,19 @@ export function OutboxHarness({ sessionId }: { sessionId: string | null }) {
       set_index: 0,
       reps: 10,
     };
-    await getOutbox().enqueue([event]);
+    await getOutbox(userId).enqueue([event]);
     refresh();
   }
 
   async function send() {
     if (!sessionId) return;
-    setMessage(await getOutbox().flush(sessionId));
+    setMessage(await getOutbox(userId).flush(sessionId));
     refresh();
   }
 
   async function complete() {
     if (!sessionId) return;
-    const outcome = await getOutbox().flush(sessionId);
+    const outcome = await getOutbox(userId).flush(sessionId);
     if (outcome !== "sent" && outcome !== "empty") {
       setMessage(`Not sent yet (${outcome}); finish once you are back online.`);
       return refresh();
