@@ -96,6 +96,36 @@ test("signing out with an unsent set asks; discarding leaves no workout data on 
   expect(await outboxDatabases(page)).toEqual([]);
 });
 
+test("a cleared on-device ledger resumes from the server: the next set does not overwrite a stored one", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signUp(page);
+  await startWorkout(page);
+  const finished = trackUploads(page);
+
+  await logFirstSetByHand(page);
+  await expect.poll(() => finished.length).toBe(1);
+  await expect(pending(page)).toHaveAttribute("data-pending", "0");
+
+  // Another device, or cleared site data: nothing local remembers set 1.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(runner(page)).toHaveAttribute("data-set-number", "2");
+
+  await runner(page).getByRole("button", { name: "Log this set by hand instead" }).click();
+  await runner(page).getByRole("button", { name: "Save set", exact: true }).click();
+  await expect.poll(() => finished.length).toBe(2);
+
+  await runner(page).getByRole("button", { name: "Finish workout" }).click();
+  await runner(page).getByRole("button", { name: "Complete workout" }).click();
+  await expect(page).toHaveURL(/\/summary$/);
+  const squat = page.locator(
+    '[data-testid="summary-exercise"][data-exercise-id="bodyweight_squat"]',
+  );
+  await expect(squat.getByTestId("summary-set")).toHaveCount(2); // both sets, none overwritten
+});
+
 test("going offline mid-workout, then reconnecting, saves the set once; completing waits for it", async ({
   page,
   context,
