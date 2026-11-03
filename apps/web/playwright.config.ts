@@ -24,6 +24,7 @@ export default defineConfig({
       testIgnore: [
         /live-coaching\.spec\.ts/,
         /live-cues\.spec\.ts/,
+        /workout-journey\.spec\.ts/,
         /workout-tracked\.spec\.ts/,
         /\.setup\.ts/,
       ],
@@ -44,7 +45,8 @@ export default defineConfig({
     // FR-06 cues: the same real model on a feed of shallow squats that triggers squat.depth.shallow.
     {
       name: "live-cues",
-      testMatch: /live-cues\.spec\.ts/,
+      // Also the M3 EXIT journey (workout-journey.spec.ts), which needs the same shallow feed.
+      testMatch: [/live-cues\.spec\.ts/, /workout-journey\.spec\.ts/],
       dependencies: ["fake-camera"],
       use: {
         ...devices["Desktop Chrome"],
