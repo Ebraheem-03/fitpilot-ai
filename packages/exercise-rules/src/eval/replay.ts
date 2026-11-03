@@ -165,8 +165,11 @@ function scoreCues(
 ): CueScore[] {
   if (!labels.supported || !labels.cue_labels) return [];
   return labels.cue_labels.rules.map((rule) => {
-    const expected = new Set(rule.expected_reps);
-    const notExpected = new Set(rule.not_expected_reps);
+    // `not_judged` scores stray cues only. The contract already keeps its lists empty; the scorer
+    // doesn't rely on that, so an unjudged entry can never count as a judgement.
+    const judged = rule.method !== "not_judged";
+    const expected = new Set(judged ? rule.expected_reps : []);
+    const notExpected = new Set(judged ? rule.not_expected_reps : []);
     const cued = new Set<number>();
     let stray = 0;
     let unjudged = 0;
@@ -205,6 +208,8 @@ export interface CueTotals {
   falsePositiveRate: number;
   /** null when no rep was labelled as warranting the cue: no evidence either way */
   recall: number | null;
+  /** annotation methods that judged at least one rep (never `not_judged`), sorted */
+  judgedBy: string[];
 }
 
 export interface CueSummary extends CueTotals {
@@ -233,7 +238,20 @@ function totals(scores: CueScore[]): CueTotals {
     stray,
     falsePositiveRate: chances === 0 ? 0 : fp / chances,
     recall: tp + fn === 0 ? null : tp / (tp + fn),
+    judgedBy: [
+      ...new Set(scores.filter((s) => s.expected + s.judgedNegatives > 0).map((s) => s.method)),
+    ].sort(),
   };
+}
+
+/**
+ * Declared rules the labels never judged negatively, i.e. rules whose false-positive rate rests
+ * on no evidence. `not_judged` entries contribute nothing here: only real judgements (by eye,
+ * derived from a by-eye label, or synthetic ground truth) count. The gate requires this to be
+ * empty, so no rule ships unevaluated.
+ */
+export function rulesLackingJudgement(summary: CueSummary, ruleIds: readonly string[]): string[] {
+  return ruleIds.filter((id) => (summary.byRule[id]?.judgedNegatives ?? 0) === 0);
 }
 
 export function aggregateCues(evals: ClipEvaluation[]): CueSummary {

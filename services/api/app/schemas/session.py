@@ -75,8 +75,15 @@ SetIndex = Annotated[int, Field(ge=0, le=50)]
 # Hard cap for one ingestion request (ADR-0011 §3).
 MAX_EVENTS_PER_BATCH = 500
 
+# slow_device: frames arrive, too few per second to analyse; camera_stalled: none analysed at all.
 TrackingDegradedReason = Literal[
-    "low_visibility", "out_of_frame", "low_light", "unsupported_view", "no_person", "slow_device"
+    "low_visibility",
+    "out_of_frame",
+    "low_light",
+    "unsupported_view",
+    "no_person",
+    "slow_device",
+    "camera_stalled",
 ]
 SkipReason = Literal["no_equipment", "too_difficult", "discomfort", "no_time", "other"]
 

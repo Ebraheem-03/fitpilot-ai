@@ -1,5 +1,6 @@
+import { TRACKING_DEGRADED_REASONS } from "@fitpilot/exercise-contracts";
 import { describe, expect, it } from "vitest";
-import { formatDuration, formatMeasurement, measurementLines } from "./cue-labels";
+import { DEGRADED_LABELS, formatDuration, formatMeasurement, measurementLines } from "./cue-labels";
 
 describe("cue display text (FR-06)", () => {
   it("formats measurements by unit", () => {
@@ -28,5 +29,12 @@ describe("cue display text (FR-06)", () => {
   it("formats span durations", () => {
     expect(formatDuration(3500)).toBe("3.5 s");
     expect(formatDuration(95_000)).toBe("1 min 35 s");
+  });
+
+  it("names every tracking reason distinctly (a stalled camera isn't a slow device)", () => {
+    const names = TRACKING_DEGRADED_REASONS.map((r) => DEGRADED_LABELS[r]);
+    expect(names.every(Boolean)).toBe(true);
+    expect(new Set(names).size).toBe(names.length);
+    expect(DEGRADED_LABELS.camera_stalled).toBe("Camera picture stopped updating");
   });
 });

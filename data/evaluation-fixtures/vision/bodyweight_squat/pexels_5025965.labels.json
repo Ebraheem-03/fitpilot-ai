@@ -33,10 +33,10 @@
       },
       {
         "rule_id": "squat.torso.forward_lean",
-        "method": "from_rep_labels",
+        "method": "not_judged",
         "expected_reps": [],
         "not_expected_reps": [],
-        "notes": "Lean not judged by eye (the video is no longer available). Only cues outside the labelled reps are scored, as wrong."
+        "notes": "Lean not judged by eye: the video is no longer available. Cues on the labelled reps are unjudged; a cue outside every labelled rep is scored as wrong."
       }
     ]
   }

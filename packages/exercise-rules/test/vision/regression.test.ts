@@ -14,6 +14,7 @@ import {
   isTraceable,
   type RepCounter,
   RULES_BY_EXERCISE,
+  rulesLackingJudgement,
   SQUAT_RULESET,
   SquatAnalyzer,
 } from "../../src";
@@ -129,13 +130,18 @@ describe.each(exerciseDirs())("vision regression: %s", (exerciseId) => {
             tp: t.truePositives,
             fn: t.falseNegatives,
             recall: t.recall ?? "n/a (no positive labels)",
+            "judged by": t.judgedBy.join(" ") || "-",
           })),
         );
         expect(s.judgedNegatives).toBeGreaterThanOrEqual(gate.cues.min_judged_negatives);
-        // every declared rule has been judged somewhere: none ships unevaluated
-        for (const rule of rules) {
-          expect(s.byRule[rule.rule_id]?.judgedNegatives ?? 0, rule.rule_id).toBeGreaterThan(0);
-        }
+        // every declared rule has been judged somewhere, by a real judgement (a `not_judged`
+        // entry only scores stray cues): none ships unevaluated
+        expect(
+          rulesLackingJudgement(
+            s,
+            rules.map((r) => r.rule_id),
+          ),
+        ).toEqual([]);
         expect(s.falsePositiveRate).toBeLessThanOrEqual(gate.cues.max_false_positive_rate);
       },
     );
