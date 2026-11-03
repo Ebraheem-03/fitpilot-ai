@@ -1,8 +1,10 @@
 """Settings hold the Groq key as a SecretStr so repr, dumps and tracebacks can't leak it."""
 
-from pydantic import SecretStr
+import pytest
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings
+from app.services.llm import build_client
 from app.services.llm.providers import OpenAICompatibleProvider
 
 SECRET = "gsk_test_secret_value_123"  # noqa: S105
@@ -38,3 +40,34 @@ def test_the_provider_sends_the_key_as_the_authorization_header() -> None:
         groq_extensions=True,
     )
     assert provider._headers == {"Authorization": f"Bearer {SECRET}"}
+
+
+# --- the fake provider is for local/test/ci only (M3 close-out review 5) ---------------------
+
+
+@pytest.mark.parametrize("env", ["local", "test", "ci"])
+def test_the_fake_provider_is_allowed_in_dev_test_and_ci(env: str) -> None:
+    assert Settings(llm_provider="fake", fitpilot_env=env).llm_provider == "fake"
+
+
+@pytest.mark.parametrize("env", ["production", "staging", "prod", "", "preview"])
+def test_the_fake_provider_is_refused_elsewhere(env: str) -> None:
+    with pytest.raises(ValidationError, match="LLM_PROVIDER=fake is only allowed"):
+        Settings(llm_provider="fake", fitpilot_env=env)
+
+
+def test_real_providers_work_in_production() -> None:
+    assert Settings(llm_provider="groq", fitpilot_env="production").llm_provider == "groq"
+    assert Settings(llm_provider="ollama", fitpilot_env="staging").llm_provider == "ollama"
+
+
+def test_the_fake_provider_cannot_be_built_in_production() -> None:
+    with pytest.raises(ValidationError):
+        build_client(Settings(llm_provider="fake", fitpilot_env="production"))
+
+
+def test_plan_generation_cap_setting() -> None:
+    assert Settings().plan_generations_per_day == 5
+    assert Settings(plan_generations_per_day=2).plan_generations_per_day == 2
+    with pytest.raises(ValidationError):
+        Settings(plan_generations_per_day=0)

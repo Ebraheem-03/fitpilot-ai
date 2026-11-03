@@ -1,7 +1,11 @@
 from functools import lru_cache
+from typing import Self
 
-from pydantic import AliasChoices, Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Environments where the fake LLM provider is allowed (local dev, web e2e, tests, CI).
+FAKE_PROVIDER_ENVS = frozenset({"local", "test", "ci"})
 
 
 class Settings(BaseSettings):
@@ -35,6 +39,19 @@ class Settings(BaseSettings):
     llm_max_retry_wait_s: float = 10.0
     # Tokens per UTC day this process may spend (Groq free tier: 200K TPD per model). 0 = no cap.
     llm_daily_token_budget: int = 180_000
+
+    # Security M2: plan generations a member may start per rolling 24 h (replays don't count).
+    plan_generations_per_day: int = Field(default=5, ge=1)
+
+    @model_validator(mode="after")
+    def _fake_provider_only_in_dev(self) -> Self:
+        # The rule-based fake planner answers any request: it must never serve real members.
+        if self.llm_provider == "fake" and self.fitpilot_env not in FAKE_PROVIDER_ENVS:
+            raise ValueError(
+                "LLM_PROVIDER=fake is only allowed when FITPILOT_ENV is one of "
+                f"{', '.join(sorted(FAKE_PROVIDER_ENVS))} (got {self.fitpilot_env!r})"
+            )
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

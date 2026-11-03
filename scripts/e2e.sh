@@ -22,6 +22,7 @@ db_url="$(sb DB_URL)"
 export DATABASE_URL="postgresql+psycopg://${db_url#postgresql://}"
 export CORS_ORIGINS="http://localhost:3100"
 export LLM_PROVIDER=fake
+export FITPILOT_ENV=local # the fake planner is refused in any other environment (Settings)
 
 (cd services/api && uv run alembic upgrade head)
 pnpm --filter @fitpilot/web exec playwright test "$@"

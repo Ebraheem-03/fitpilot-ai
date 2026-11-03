@@ -130,6 +130,8 @@ export const PLAN_ISSUE_CODES = [
   "prescription",
   /** estimated session length exceeds session_minutes */
   "session_length",
+  /** rationale, focus or progression used medical wording (diagnose, injury, pain, rehab...) */
+  "medical_claim",
 ] as const;
 export const PlanIssueCode = z.enum(PLAN_ISSUE_CODES);
 

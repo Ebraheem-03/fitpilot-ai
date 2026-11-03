@@ -51,10 +51,25 @@ class WorkoutSessionBrief(BaseModel):
     perceived_difficulty: int | None
 
 
+class ExerciseProgress(BaseModel):
+    """What the server has stored for one exercise of a started session (events only)."""
+
+    # distinct set indexes with a stored `set_logged` or `set_completed`, ascending
+    set_indexes: list[int]
+    # an `exercise_skipped` event is stored (a later set does not clear it)
+    skipped: bool
+    # highest set index in any stored set_logged / set_completed / rep_completed (reps of a set
+    # still in progress count); null when there is none
+    highest_set_index: int | None
+
+
 class WorkoutSessionOut(WorkoutSessionBrief):
     note: str | None
     # present once the session is completed
     summary: SessionSummary | None
+    # While the session is `started` (GET and start responses, not the list): per exercise_id,
+    # for exercises with a stored set, rep or skip. null once completed.
+    progress: dict[str, ExerciseProgress] | None = None
 
 
 class WorkoutSessionPage(BaseModel):

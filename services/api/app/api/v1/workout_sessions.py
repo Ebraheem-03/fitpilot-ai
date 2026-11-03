@@ -67,7 +67,7 @@ def start_session(
         ) from e
     if not created:
         response.status_code = status.HTTP_200_OK
-    return WorkoutSessionOut.model_validate(session)
+    return sessions.to_out(db, session)
 
 
 @router.get("", response_model=WorkoutSessionPage)

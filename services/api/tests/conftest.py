@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 # CI and tests never call a live model (ADR-0006 §5). Env beats the .env files Settings reads, so a
 # developer's real GROQ_API_KEY in the root .env can't be picked up by any test.
 os.environ["LLM_PROVIDER"] = "fake"
+os.environ["FITPILOT_ENV"] = "test"  # the fake provider is refused in any other environment
 os.environ["GROQ_API_KEY"] = ""
 
 API_ROOT = Path(__file__).resolve().parents[1]

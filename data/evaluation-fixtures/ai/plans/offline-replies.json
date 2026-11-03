@@ -5,6 +5,10 @@
       { "kind": "json_validate_failed" },
       { "kind": "planner" }
     ],
+    "p05_mobility_intermediate_mat": [
+      { "kind": "planner", "mutate": "medical_claim" },
+      { "kind": "planner" }
+    ],
     "p06_general_advanced_six_long_days": [
       { "kind": "planner", "mutate": "drop_day" },
       { "kind": "planner" }
