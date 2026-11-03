@@ -6,17 +6,20 @@ releases the claim, and the session is idle while the provider runs.
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import PlanGenerationClaim, PlanStatus, TrainingPlanRecord
 from app.repositories import training_plans as repo
 from app.services.llm import FakeProvider, FakeReply
+from app.services.plans import service as plans_service
 from tests.conftest import alembic_config
 from tests.db.plan_helpers import generate, llm, member, sub_of
 from tests.db.test_training_plans import plan_count
@@ -139,6 +142,83 @@ def test_a_worker_that_lost_its_claim_to_a_takeover_saves_nothing(
     assert r.status_code == 409 and r.json()["detail"]["code"] == "generation_in_progress"
     assert plan_count(db, sub) == 0
     assert [c.idempotency_key for c in claims(db, sub)] == ["takeover-key-1"]  # theirs, untouched
+
+
+def same_key_takeover(db: Session, user_id: uuid.UUID) -> None:
+    """A takeover that happens to use the same Idempotency-Key (a client retry that found our
+    claim stale): same key, newer claim."""
+    db.execute(
+        text(
+            "UPDATE plan_generation_claims SET claimed_at = claimed_at + interval '1 second' "
+            "WHERE user_id = :u"
+        ),
+        {"u": user_id},
+    )
+    db.commit()
+
+
+def test_a_failed_worker_does_not_release_a_same_key_takeovers_claim(
+    api: TestClient, db: Session
+) -> None:
+    h = member(api)[1]
+    sub = sub_of(h)
+    provider = ProbingProvider(lambda: same_key_takeover(db, sub), FakeReply.rate_limited(30.0))
+    with llm(provider=provider):
+        r = generate(api, h, key="plan-key-0007")
+    assert r.status_code == 503 and r.json()["detail"]["code"] == "coach_busy"
+    assert [c.idempotency_key for c in claims(db, sub)] == ["plan-key-0007"]  # theirs, kept
+
+
+def test_a_worker_that_lost_the_claim_to_a_same_key_takeover_saves_nothing(
+    api: TestClient, db: Session
+) -> None:
+    h = member(api)[1]
+    sub = sub_of(h)
+    provider = ProbingProvider(lambda: same_key_takeover(db, sub), FakeReply.ok(VALID_PLAN))
+    with llm(provider=provider):
+        r = generate(api, h, key="plan-key-0008")
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "generation_in_progress"
+    assert plan_count(db, sub) == 0
+    assert [c.idempotency_key for c in claims(db, sub)] == ["plan-key-0008"]
+
+
+# --- a failure while saving releases the claim ----------------------------------------------
+
+
+def test_a_failure_while_saving_releases_the_claim_so_the_retry_runs_at_once(
+    api: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h = member(api)[1]
+    sub = sub_of(h)
+
+    def boom(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("database hiccup while saving")
+
+    with monkeypatch.context() as m, llm(FakeReply.ok(VALID_PLAN)):
+        m.setattr(plans_service, "_save", boom)
+        with pytest.raises(RuntimeError):
+            generate(api, h, key="plan-key-0009")
+    assert claims(db, sub) == [] and plan_count(db, sub) == 0
+
+    with llm(FakeReply.ok(VALID_PLAN)):  # no 3-minute wait
+        assert generate(api, h, key="plan-key-0009").status_code == 201
+    assert claims(db, sub) == []
+
+
+def test_an_integrity_error_with_no_winner_releases_the_claim_too(
+    api: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h = member(api)[1]
+    sub = sub_of(h)
+
+    def conflict(*_: Any, **__: Any) -> Any:
+        raise IntegrityError("insert", {}, Exception("unexpected constraint"))
+
+    with monkeypatch.context() as m, llm(FakeReply.ok(VALID_PLAN)):
+        m.setattr(plans_service, "_save", conflict)
+        with pytest.raises(IntegrityError):
+            generate(api, h)
+    assert claims(db, sub) == []
 
 
 # --- every ending releases the claim --------------------------------------------------------
@@ -291,9 +371,14 @@ def test_claims_table_has_rls_and_no_data_api_grants(engine: Engine) -> None:
 def test_a_member_has_at_most_one_claim_and_it_goes_with_the_member(db: Session) -> None:
     user = uuid.uuid4()
     db.execute(text("INSERT INTO users (id) VALUES (:u)"), {"u": user})
-    assert repo.try_claim_generation(db, user, "first-key-0001") is True
-    assert repo.try_claim_generation(db, user, "second-key-0001") is False
-    repo.release_claim(db, user, "second-key-0001")  # not the holder: no effect
+    first = repo.try_claim_generation(db, user, "first-key-0001")
+    assert first is not None
+    assert repo.try_claim_generation(db, user, "second-key-0001") is None
+    now = datetime.now(UTC)
+    repo.release_claim(db, user, "second-key-0001", now)  # not the holder: no effect
+    repo.release_claim(db, user, "first-key-0001", now)  # right key, not this claim: no effect
     assert [c.idempotency_key for c in claims(db, user)] == ["first-key-0001"]
+    assert repo.lock_own_claim(db, user, "first-key-0001", first) is True
+    assert repo.lock_own_claim(db, user, "first-key-0001", now) is False
     db.execute(text("DELETE FROM users WHERE id = :u"), {"u": user})
     assert claims(db, user) == []
