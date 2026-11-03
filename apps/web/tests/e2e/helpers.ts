@@ -44,3 +44,30 @@ export async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 }
+
+/** Fill in the onboarding form with a profile the fake planner can build a plan for. */
+export async function onboard(page: Page, opts: { days?: string; minutes?: string } = {}) {
+  await page.goto("/app/onboarding");
+  await field(page, "Main goal").selectOption("strength");
+  await page.getByRole("radio", { name: "Intermediate" }).check();
+  await field(page, "Days per week").fill(opts.days ?? "3");
+  await field(page, "Minutes per session").fill(opts.minutes ?? "45");
+  await page.getByRole("checkbox", { name: "Dumbbells" }).check();
+  await page.getByRole("checkbox", { name: "Bench" }).check();
+  await page.getByRole("button", { name: "Save profile" }).click();
+  await expect(page).toHaveURL(/\/app\/profile$/);
+}
+
+/**
+ * Through the real UI: onboard, generate a plan (fake planner), start Monday's workout. Returns
+ * the session id. Monday is used because it is deterministic whatever day the test runs on.
+ */
+export async function startWorkout(page: Page): Promise<string> {
+  await onboard(page);
+  await page.goto("/app/plan");
+  await page.getByRole("button", { name: "Generate my plan" }).click();
+  await expect(page.getByTestId("plan-version-label")).toHaveText("· version 1");
+  await page.getByRole("button", { name: "Start Monday's workout", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/workouts\/[0-9a-f-]{36}$/);
+  return page.url().split("/").pop()!;
+}

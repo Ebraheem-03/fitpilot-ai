@@ -225,6 +225,19 @@ describe("SessionRecorder (FR-06/FR-07 events from the live engine, ADR-0011)", 
     expect(r.events).toHaveLength(3);
   });
 
+  it("after a failed set the retry reuses the set index, after a normal stop it moves on", () => {
+    const r = recorder({ firstSetIndex: 4 });
+    rep(r, 1000, 1);
+    r.endSet(3000, 1, { failed: true }); // the camera gave up
+    r.startSet(0, EPOCH + 60_000);
+    rep(r, 1000, 1);
+    r.endSet(3000, 1); // the retry, ended normally
+    r.startSet(0, EPOCH + 120_000);
+    r.endSet(1000, 0);
+    const indexes = r.events.filter((e) => e.type === "set_completed").map((e) => e.set_index);
+    expect(indexes).toEqual([4, 4, 5]);
+  });
+
   it("records nothing outside a set", () => {
     const r = new SessionRecorder({ exerciseId: "bodyweight_squat", sessionId: SESSION });
     r.frame(frame(0, { rep: 1 }));

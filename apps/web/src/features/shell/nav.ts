@@ -4,6 +4,8 @@ export type NavItem = { href: string; label: string };
 
 const MEMBER: NavItem[] = [
   { href: "/app", label: "Home" },
+  { href: "/app/plan", label: "Plan" },
+  { href: "/app/workouts", label: "Workouts" },
   { href: "/app/exercises", label: "Exercises" },
   { href: "/app/profile", label: "Profile" },
 ];

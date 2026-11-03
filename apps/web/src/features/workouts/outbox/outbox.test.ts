@@ -352,6 +352,49 @@ describe("outbox: idle() before the camera starts", () => {
   });
 });
 
+describe("outbox: dispose() on sign-out", () => {
+  it("a flush still running does not send another batch, and later flushes send nothing", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const h = harness(
+      async (_c, i) => {
+        if (i === 0) await gate;
+        return { ok: true };
+      },
+      new MemoryStore(),
+      { maxBatchEvents: 1 },
+    );
+    await h.outbox.enqueue([rep(0), rep(1), rep(2)]);
+    const running = h.outbox.flush();
+    await vi.waitFor(() => expect(h.sent).toHaveLength(1));
+
+    h.outbox.dispose(); // sign-out: the 3 s cap passed with a send still in flight
+    release();
+    expect(await running).toBe("disposed");
+    expect(h.sent).toHaveLength(1);
+    expect(await h.outbox.pendingCount()).toBe(2); // kept on the device for the member's next visit
+
+    expect(await h.outbox.flush()).toBe("disposed");
+    expect(h.sent).toHaveLength(1);
+  });
+
+  it("does not schedule a retry after a failure that lands post-dispose", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const h = harness(async () => {
+      await gate;
+      return { ok: false, kind: "transient" } as const;
+    });
+    await h.outbox.enqueue([rep(0)]);
+    const running = h.outbox.flush();
+    await vi.waitFor(() => expect(h.sent).toHaveLength(1));
+    h.outbox.dispose();
+    release();
+    await running;
+    expect(h.timers).toHaveLength(0);
+  });
+});
+
 describe("outbox: quarantine housekeeping", () => {
   const DAY = 24 * 3600 * 1000;
 

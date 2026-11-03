@@ -1,11 +1,15 @@
 "use client";
 import { flushBeforeSignOut } from "../workouts/outbox/browser";
+import { clearAllStoredProgress } from "../workouts/useStoredProgress";
 import { signOut } from "./actions";
 
 /** Tries to send the member's queued workout data first (best effort), then signs out. */
 export function SignOutButton({ userId }: { userId?: string }) {
   async function action() {
-    if (userId) await flushBeforeSignOut(userId);
+    if (userId) {
+      await flushBeforeSignOut(userId);
+      clearAllStoredProgress(userId); // workout progress kept on this device goes with the session
+    }
     await signOut();
   }
   return (

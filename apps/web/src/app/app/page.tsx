@@ -26,8 +26,13 @@ async function NextStep() {
   return (
     <section className="rounded-xl border border-border p-6">
       <h2 className="text-lg font-semibold">Your goal: {GOAL_LABELS[profile.primary_goal]}</h2>
-      <p className="mt-1 text-muted">Workout plans arrive in a later milestone.</p>
-      <Link href="/app/profile" className="mt-4 inline-block font-medium underline">
+      <p className="mt-1 text-muted">
+        Your weekly plan is built from your profile and the approved exercise library.
+      </p>
+      <Link href="/app/plan" className="mt-4 inline-block font-medium underline">
+        See your training plan
+      </Link>
+      <Link href="/app/profile" className="mt-4 ml-4 inline-block font-medium underline">
         View your profile
       </Link>
     </section>

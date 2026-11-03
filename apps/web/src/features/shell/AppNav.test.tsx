@@ -18,10 +18,13 @@ function links(role: Role) {
 
 describe("AppNav", () => {
   it.each<[Role, string[]]>([
-    ["member", ["Home", "Exercises", "Profile"]],
-    ["trainer", ["Home", "Exercises", "Profile", "My members"]],
-    ["gym_admin", ["Home", "Exercises", "Profile", "My members", "Gym admin"]],
-    ["platform_admin", ["Home", "Exercises", "Profile", "My members", "Gym admin"]],
+    ["member", ["Home", "Plan", "Workouts", "Exercises", "Profile"]],
+    ["trainer", ["Home", "Plan", "Workouts", "Exercises", "Profile", "My members"]],
+    ["gym_admin", ["Home", "Plan", "Workouts", "Exercises", "Profile", "My members", "Gym admin"]],
+    [
+      "platform_admin",
+      ["Home", "Plan", "Workouts", "Exercises", "Profile", "My members", "Gym admin"],
+    ],
   ])("%s sees %j", (role, expected) => {
     expect(links(role)).toEqual(expected);
   });
