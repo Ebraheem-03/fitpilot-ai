@@ -1,8 +1,8 @@
 """/training-plans (FR-02, blueprint §7). Thin: parse, call the service, map domain errors to HTTP.
 
 Error bodies are `{"detail": {"code": ..., "message": ...}}`; the code is what clients branch on:
-`profile_required` (409), `generation_in_progress` (409), `coach_busy` (503 + Retry-After),
-`ai_unavailable` (503), `plan_not_found` (404).
+`profile_required` (409), `generation_in_progress` (409), `plan_limit_reached` (429 + Retry-After),
+`coach_busy` (503 + Retry-After), `ai_unavailable` (503), `plan_not_found` (404).
 """
 
 import math
@@ -12,6 +12,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.config import Settings, get_settings
 from app.schemas.plan import TrainingPlanOut
 from app.schemas.workout_session import IDEMPOTENCY_KEY_PATTERN
 from app.services.llm import LLMBusy, LLMClient, LLMUnavailable, get_llm_client
@@ -46,6 +47,7 @@ def _not_found() -> HTTPException:
     responses={
         202: {"model": TrainingPlanOut, "description": "Saved as needs_review"},
         409: {"description": "profile_required or generation_in_progress"},
+        429: {"description": "plan_limit_reached (with Retry-After)"},
         503: {"description": "coach_busy (with Retry-After) or ai_unavailable"},
     },
 )
@@ -53,6 +55,7 @@ def generate_plan(
     user: CurrentUser,
     db: DbSession,
     llm: LLM,
+    settings: Annotated[Settings, Depends(get_settings)],
     response: Response,
     idempotency_key: IdempotencyKeyHeader,
 ) -> Any:
@@ -65,9 +68,13 @@ def generate_plan(
     The original plan is replayed whatever the profile says now: to plan from an updated
     profile, send a new key.
     409 `generation_in_progress`: another generation for this member is running; retry later.
+    429 `plan_limit_reached`: PLAN_GENERATIONS_PER_DAY plans already made in the last 24 h; the
+    Retry-After header is the seconds until the oldest of them ages out. Replays are exempt.
     """
     try:
-        result = plans.generate_for_member(db, user, idempotency_key, llm)
+        result = plans.generate_for_member(
+            db, user, idempotency_key, llm, max_per_day=settings.plan_generations_per_day
+        )
     except plans.ProfileRequired as e:
         raise _error(
             status.HTTP_409_CONFLICT, "profile_required", "Create your profile first"
@@ -78,6 +85,13 @@ def generate_plan(
             "generation_in_progress",
             "A plan is already being generated",
             **{"Retry-After": str(IN_PROGRESS_RETRY_S)},
+        ) from e
+    except plans.PlanLimitReached as e:
+        raise _error(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "plan_limit_reached",
+            "You have reached today's limit for new plans. Try again later.",
+            **{"Retry-After": str(e.retry_after_s)},
         ) from e
     except LLMBusy as e:
         retry = math.ceil(e.retry_after_s) if e.retry_after_s else DEFAULT_BUSY_RETRY_S

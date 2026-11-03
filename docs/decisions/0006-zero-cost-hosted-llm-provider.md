@@ -28,7 +28,7 @@ Constraints any provider must meet:
 
 ## Spike results (2026-10-28)
 
-Script: `services/api/scripts/spikes/llm_plan_spike.py` (prompt `plan-spike-v1`, throwaway). Inputs: 12 synthetic profiles (1–6 days/week, 10–180 min, equipment none / dumbbells / unusable / mixed, edge cases) and the 7-exercise catalogue planned for S1.
+Script: a throwaway (prompt `plan-spike-v1`), deleted at the M3 close-out and kept in the repository history; its results live here and in the evaluation note below. Inputs: 12 synthetic profiles (1–6 days/week, 10–180 min, equipment none / dumbbells / unusable / mixed, edge cases) and the 7-exercise catalogue planned for S1.
 
 Validation order: Pydantic schema, then catalogue, equipment, days/week, reps-vs-duration, duplicates and estimated session length ≤ `session_minutes`. A failed plan gets one repair call. Full method and failure cases: [docs/evaluation/llm-spike-2026-10-28.md](../evaluation/llm-spike-2026-10-28.md).
 
@@ -83,6 +83,7 @@ Validation order: Pydantic schema, then catalogue, equipment, days/week, reps-vs
 - The repair loop is earning its keep on infrastructure errors (truncation, Groq's schema check), not on bad plans. Escalation (`needs_review`) still has to exist: 20b escalated 2/36 even after repair.
 - Demo data should still be synthetic where practical. ZDR covers retention, but the public demo should not invite real health details. With ZDR off, Groq may keep inputs/outputs up to 30 days for reliability and abuse monitoring [1].
 - Free-tier terms change. Re-check [1]–[8] before any public launch (M5).
+- **The `BudgetGuard` daily token and monthly USD ledgers are per process, in memory.** They are correct only with a single API worker, and they reset on restart. With more than one worker or instance each keeps its own count, so the real spend can be a multiple of the cap. A durable, shared ledger (a table or Redis, updated atomically) is needed before scaling out or enabling any paid model. At `LLM_MONTHLY_BUDGET_USD=0` paid calls are refused outright, so the free tier is safe either way; the Groq account's own limits remain the backstop. The per-member daily plan cap (`PLAN_GENERATIONS_PER_DAY`) counts stored plan rows, so it is durable and already holds across workers.
 
 ## Sources (re-checked 2026-10-28)
 

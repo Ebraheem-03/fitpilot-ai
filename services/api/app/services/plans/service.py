@@ -21,10 +21,11 @@ values, prompts, plan text or idempotency keys.
 """
 
 import logging
+import math
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import cast
 
 from sqlalchemy.exc import IntegrityError
@@ -61,8 +62,32 @@ class GenerationInProgress(Exception):
     pass
 
 
+class PlanLimitReached(Exception):
+    """The member already made `plan_generations_per_day` plans in the last 24 h."""
+
+    def __init__(self, retry_after_s: int) -> None:
+        super().__init__("plan generation limit reached")
+        self.retry_after_s = retry_after_s
+
+
 class PlanNotFound(Exception):
     pass
+
+
+GENERATION_WINDOW = timedelta(hours=24)
+
+
+def _check_generation_cap(db: Session, user_id: uuid.UUID, max_per_day: int) -> None:
+    """Raise PlanLimitReached when the member has `max_per_day` plans (any status) younger than
+    24 h. Retry-After is the time until the oldest of those ages out."""
+    created, now = repo.recent_generation_times(db, user_id, GENERATION_WINDOW)
+    if len(created) < max_per_day:
+        return
+    # the row that must age out for a slot to open is the (len - max + 1)th oldest
+    blocking = created[len(created) - max_per_day]
+    retry = max(1, math.ceil((blocking + GENERATION_WINDOW - now).total_seconds()))
+    log_event(logger, "plan.generation_rejected", logging.WARNING, reason="daily_limit")
+    raise PlanLimitReached(retry)
 
 
 @dataclass(frozen=True)
@@ -77,6 +102,7 @@ def generate_for_member(
     idempotency_key: str,
     client: LLMClient,
     catalogue: Mapping[str, ExerciseContract] | None = None,
+    max_per_day: int = 5,
 ) -> Generated:
     # Plain values up front: the session is committed (and may expire `user`) between phases.
     user_id = user.id
@@ -99,6 +125,13 @@ def generate_for_member(
         db.rollback()
         raise ProfileRequired
     inputs = PlanInputs.from_profile(profile)
+    # Daily cap (security M2), before the claim so an over-limit member costs nothing. Replays
+    # were answered above and are not generations.
+    try:
+        _check_generation_cap(db, user_id, max_per_day)
+    except PlanLimitReached:
+        db.rollback()
+        raise
     claimed_at = repo.try_claim_generation(db, user_id, idempotency_key)
     if claimed_at is None:
         db.rollback()
@@ -109,6 +142,14 @@ def generate_for_member(
         repo.release_claim(db, user_id, idempotency_key, claimed_at)
         db.commit()
         return _replayed(finished)
+    # Re-check under the claim: two requests that both passed the check above are now serialised,
+    # so the later one sees the earlier one's plan and can't be the 6th.
+    try:
+        _check_generation_cap(db, user_id, max_per_day)
+    except PlanLimitReached:
+        repo.release_claim(db, user_id, idempotency_key, claimed_at)
+        db.commit()
+        raise
     db.commit()  # the claim is now visible; no transaction or connection is held past here
 
     # Phase 2: the provider call, with no database session in use.

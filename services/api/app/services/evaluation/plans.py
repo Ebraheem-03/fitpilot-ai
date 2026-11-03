@@ -98,6 +98,8 @@ def _mutate(plan: dict[str, Any], how: str) -> dict[str, Any]:
         first["exercise_id"] = "dragon_flag"
     elif how == "add_dumbbells":
         first.update(exercise_id="dumbbell_row", reps=10, duration_s=None)
+    elif how == "medical_claim":
+        plan["rationale"] = "A gentle rehab-style progression for your joints."
     elif how == "overlong":
         for day in plan["days"]:
             for ex in day["exercises"]:

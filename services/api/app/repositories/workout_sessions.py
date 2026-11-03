@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import Integer, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,13 @@ from app.models import (
     SessionEventType,
     SessionStatus,
     WorkoutSession,
+)
+
+PROGRESS_EVENT_TYPES = (
+    SessionEventType.set_logged,
+    SessionEventType.set_completed,
+    SessionEventType.rep_completed,
+    SessionEventType.exercise_skipped,
 )
 
 
@@ -146,6 +153,21 @@ def shown_cue_keys(db: Session, session_id: uuid.UUID) -> set[tuple[str, str, st
         )
     ).all()
     return {(exercise_id, rule_id, message_id) for exercise_id, rule_id, message_id in rows}
+
+
+def set_progress_rows(db: Session, session_id: uuid.UUID) -> list[tuple[str, str, int | None]]:
+    """Distinct (exercise_id, event type, set_index) of the stored set and skip events. `set_index`
+    is None for `exercise_skipped`."""
+    set_index = SessionEventRow.payload["set_index"].astext.cast(Integer)
+    rows = db.execute(
+        select(SessionEventRow.exercise_id, SessionEventRow.type, set_index)
+        .where(
+            SessionEventRow.session_id == session_id,
+            SessionEventRow.type.in_(PROGRESS_EVENT_TYPES),
+        )
+        .distinct()
+    ).all()
+    return [(exercise_id, event_type.value, index) for exercise_id, event_type, index in rows]
 
 
 def insert_events(db: Session, rows: list[dict[str, Any]]) -> int:

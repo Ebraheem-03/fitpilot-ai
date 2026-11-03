@@ -132,7 +132,9 @@ class ReplySpec(_Strict):
 
     kind: Literal["planner", "json_validate_failed", "rate_limited", "busy", "unavailable"]
     # planner only: break the rule-based plan in one known way
-    mutate: Literal["drop_day", "unknown_exercise", "add_dumbbells", "overlong"] | None = None
+    mutate: (
+        Literal["drop_day", "unknown_exercise", "add_dumbbells", "overlong", "medical_claim"] | None
+    ) = None
     retry_after_s: float | None = None
 
 

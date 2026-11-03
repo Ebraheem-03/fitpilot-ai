@@ -130,4 +130,16 @@ describe("TrainingPlanResource", () => {
     };
     expect(messages(TrainingPlanResource, review)).not.toEqual([]);
   });
+
+  it("accepts the medical_claim issue code", () => {
+    const review = {
+      ...resource(),
+      status: "needs_review",
+      plan: null,
+      validation_issues: [
+        { code: "medical_claim", message: "rationale: contains the medical term" },
+      ],
+    };
+    expect(messages(TrainingPlanResource, review)).toEqual([]);
+  });
 });

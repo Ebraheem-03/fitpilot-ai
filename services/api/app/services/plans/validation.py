@@ -6,6 +6,7 @@ member's inputs. Messages are ours (never model text), so they are safe to store
 they go back to the model on repair.
 """
 
+import re
 from collections.abc import Mapping
 
 from app.schemas.exercise import ExerciseContract
@@ -18,6 +19,38 @@ from app.services.plans.inputs import PlanInputs
 #   duration_s.
 WARMUP_MIN = 5
 SECONDS_PER_REP = 3
+
+# Content safety (M3 security L4): the prompt forbids medical claims, but the model's free text
+# (rationale, day focus, progression) is shown to members, so enforce it here too. Whole words,
+# case-insensitive. A deny-list is a backstop, not a classifier: it catches the obvious wording.
+MEDICAL_TERMS: frozenset[str] = frozenset(
+    {
+        "diagnose",
+        "diagnosed",
+        "diagnosis",
+        "injury",
+        "injuries",
+        "injured",
+        "pain",
+        "painful",
+        "rehab",
+        "rehabilitation",
+        "cure",
+        "cured",
+        "cures",
+        "medication",
+        "medications",
+        "physiotherapy",
+        "physiotherapist",
+    }
+)
+_MEDICAL_RE = re.compile(r"\b(" + "|".join(sorted(MEDICAL_TERMS)) + r")\b", re.IGNORECASE)
+
+
+def medical_term_in(text: str) -> str | None:
+    """The first deny-listed word in `text` (lower-cased), or None."""
+    match = _MEDICAL_RE.search(text)
+    return match.group(1).lower() if match else None
 
 
 def eligible_exercises(
@@ -36,6 +69,18 @@ def estimate_minutes(day: TrainingDay) -> float:
     return WARMUP_MIN + total_s / 60
 
 
+def _check_medical(issues: list[ValidationIssue], where: str, text: str) -> None:
+    term = medical_term_in(text)
+    if term is not None:
+        issues.append(
+            ValidationIssue(
+                "medical_claim",
+                f"{where}: contains the medical term '{term}'. Don't diagnose, treat or "
+                "promise recovery; describe training only",
+            )
+        )
+
+
 def validate_plan(
     plan: TrainingPlan, inputs: PlanInputs, catalogue: Mapping[str, ExerciseContract]
 ) -> list[ValidationIssue]:
@@ -49,9 +94,12 @@ def validate_plan(
             )
         )
     owned = set(inputs.equipment)
+    _check_medical(issues, "rationale", plan.rationale)
     for day in plan.days:
         name = day.day_of_week
+        _check_medical(issues, f"{name} focus", day.focus)
         for ex in day.exercises:
+            _check_medical(issues, f"{name} {ex.exercise_id} progression", ex.progression)
             entry = catalogue.get(ex.exercise_id)
             if entry is None:
                 issues.append(

@@ -85,6 +85,26 @@ def get_by_idempotency_key(db: Session, user_id: uuid.UUID, key: str) -> Trainin
     )
 
 
+def recent_generation_times(
+    db: Session, user_id: uuid.UUID, window: timedelta
+) -> tuple[list[datetime], datetime]:
+    """created_at of the member's plans (any status) made within `window`, oldest first, and the
+    database clock's now (so the caller's arithmetic uses one clock)."""
+    now = db.scalar(select(_now()))
+    assert now is not None
+    created = list(
+        db.scalars(
+            select(TrainingPlanRecord.created_at)
+            .where(
+                TrainingPlanRecord.user_id == user_id,
+                TrainingPlanRecord.created_at > now - window,
+            )
+            .order_by(TrainingPlanRecord.created_at)
+        )
+    )
+    return created, now
+
+
 def get_owned(db: Session, user_id: uuid.UUID, plan_id: uuid.UUID) -> TrainingPlanRecord | None:
     return db.scalar(
         select(TrainingPlanRecord).where(
