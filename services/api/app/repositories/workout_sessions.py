@@ -120,15 +120,17 @@ def count_events(db: Session, session_id: uuid.UUID) -> int:
     )
 
 
-def existing_keys(db: Session, session_id: uuid.UUID, keys: Iterable[str]) -> set[str]:
-    return set(
-        db.scalars(
-            select(SessionEventRow.idempotency_key).where(
-                SessionEventRow.session_id == session_id,
-                SessionEventRow.idempotency_key.in_(list(keys)),
-            )
+def stored_payloads(
+    db: Session, session_id: uuid.UUID, keys: Iterable[str]
+) -> dict[str, dict[str, Any]]:
+    """The stored payload of each of `keys` that already exists in the session."""
+    rows = db.execute(
+        select(SessionEventRow.idempotency_key, SessionEventRow.payload).where(
+            SessionEventRow.session_id == session_id,
+            SessionEventRow.idempotency_key.in_(list(keys)),
         )
     )
+    return {key: payload for key, payload in rows}
 
 
 def shown_cue_keys(db: Session, session_id: uuid.UUID) -> set[tuple[str, str, str]]:

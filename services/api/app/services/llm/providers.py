@@ -11,6 +11,7 @@ raises for HTTP/transport problems; retry, budget and telemetry policy live in L
 from typing import Any, Protocol
 
 import httpx
+from pydantic import SecretStr
 
 from app.services.llm.types import CompletionRequest, ProviderResponse, Usage
 
@@ -39,7 +40,7 @@ class OpenAICompatibleProvider:
         self,
         name: str,
         base_url: str,
-        api_key: str | None,
+        api_key: SecretStr | None,
         *,
         timeout_s: float,
         groq_extensions: bool,
@@ -47,7 +48,8 @@ class OpenAICompatibleProvider:
     ) -> None:
         self.name = name
         self._url = base_url.rstrip("/") + "/chat/completions"
-        self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        # The only place the secret is unwrapped.
+        self._headers = {"Authorization": f"Bearer {api_key.get_secret_value()}"} if api_key else {}
         self._groq = groq_extensions
         self._http = httpx.Client(timeout=httpx.Timeout(timeout_s), transport=transport)
 

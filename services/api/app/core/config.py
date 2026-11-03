@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     llm_provider: str = "groq"  # groq | fake | ollama (app/services/llm/factory.py)
     llm_model: str = "openai/gpt-oss-120b"
     llm_monthly_budget_usd: float = 0.0
-    groq_api_key: str | None = None
+    # SecretStr: repr/model_dump/tracebacks show asterisks; unwrap only at the Authorization header
+    groq_api_key: SecretStr | None = None
     groq_base_url: str = "https://api.groq.com/openai/v1"
     ollama_base_url: str = "http://localhost:11434/v1"
     # ADR-0006 §3 call settings for structured generation.
