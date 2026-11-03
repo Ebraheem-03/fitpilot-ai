@@ -10,11 +10,11 @@ import { SKIP_REASONS } from "@fitpilot/exercise-contracts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LiveCoach } from "../live-coaching/LiveCoach";
 import type { SetSummary } from "../live-coaching/recording/summary";
 import { completeSession } from "./actions";
 import { manualSetEvent, skipEvent, trackedSetRatingEvent } from "./events";
 import { MEDICAL_NOTE, SKIP_LABELS, targetLabel } from "./labels";
+import { LiveSessionCoach } from "./LiveSessionCoach";
 import { getOutbox } from "./outbox/browser";
 import {
   counts,
@@ -22,6 +22,8 @@ import {
   exerciseState,
   nextSetIndex,
   progressOf,
+  seedFromServer,
+  type ServerProgress,
   recordSet,
   skipExercise,
   type Progress,
@@ -52,6 +54,12 @@ export interface WorkoutRunnerProps {
   exercises: RunnerExercise[];
   /** the member already agreed to save tracking data (ADR-0011 §4) */
   trackingConsent: boolean;
+  /**
+   * What the server has stored for this started session (`WorkoutSession.progress`). Merged into
+   * the on-device ledger on mount, so a cleared ledger or another device resumes where the server
+   * is and never reuses a stored set index.
+   */
+  serverProgress?: ServerProgress | null;
 }
 
 type Consent = "granted" | "declined" | "unknown";
@@ -91,6 +99,7 @@ export function WorkoutRunner({
   sessionId,
   exercises,
   trackingConsent,
+  serverProgress = null,
 }: WorkoutRunnerProps) {
   const router = useRouter();
   const [progress, updateProgress] = useStoredProgress(userId, sessionId);
@@ -104,6 +113,15 @@ export function WorkoutRunner({
   const [error, setError] = useState<string | null>(null);
   const [skipReason, setSkipReason] = useState<SkipReason | "">("");
   const pending = usePendingCount(userId, sessionId);
+  // Once the ledger is readable, take in what the server holds (idempotent; no write if nothing new).
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || progress === null) return;
+    seeded.current = true;
+    if (seedFromServer(progress, serverProgress) !== progress) {
+      updateProgress((p) => seedFromServer(p, serverProgress));
+    }
+  }, [progress, serverProgress, updateProgress]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const planned = exercises.map((e) => e.planned);
 
@@ -536,7 +554,7 @@ function SetEntry({
   const saveWithCamera = counted !== null && consent === "granted";
   return (
     <div className="flex flex-col gap-3" data-testid="camera-set">
-      <LiveCoach
+      <LiveSessionCoach
         exercise={{
           id: exercise.id,
           name: exercise.name,

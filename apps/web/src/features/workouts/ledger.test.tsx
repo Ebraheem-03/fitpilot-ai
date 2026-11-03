@@ -12,9 +12,11 @@ vi.mock("./actions", () => ({
   deleteSession: (...a: unknown[]) => deleteSession(...a),
   startSession: vi.fn(),
 }));
-const flushBeforeSignOut = vi.fn(async (...args: unknown[]) => void args);
+const flushBeforeSignOut = vi.fn<(userId: string) => Promise<{ pending: number }>>();
+const discardOutbox = vi.fn(async (...args: unknown[]) => void args);
 vi.mock("./outbox/browser", () => ({
-  flushBeforeSignOut: (...a: unknown[]) => flushBeforeSignOut(...a),
+  flushBeforeSignOut: (u: string) => flushBeforeSignOut(u),
+  discardOutbox: (...a: unknown[]) => discardOutbox(...a),
 }));
 const signOut = vi.fn(async () => {});
 vi.mock("../auth/actions", () => ({ signOut: () => signOut() }));
@@ -48,7 +50,9 @@ const saved = (userId: string, sessionId: string) =>
 beforeEach(() => {
   storage.clear();
   deleteSession.mockReset();
-  flushBeforeSignOut.mockClear();
+  flushBeforeSignOut.mockReset();
+  flushBeforeSignOut.mockResolvedValue({ pending: 0 });
+  discardOutbox.mockClear();
   signOut.mockClear();
 });
 afterEach(cleanup);
@@ -140,7 +144,10 @@ describe("progress ledger is removed", () => {
   it("when the member signs out: queued data is sent first, then progress goes", async () => {
     seed();
     const order: string[] = [];
-    flushBeforeSignOut.mockImplementation(async () => void order.push("flush"));
+    flushBeforeSignOut.mockImplementation(async () => {
+      order.push("flush");
+      return { pending: 0 };
+    });
     signOut.mockImplementation(async () => void order.push(`signout:${saved("alice", S1)}`));
     render(<SignOutButton userId="alice" />);
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
@@ -148,5 +155,53 @@ describe("progress ledger is removed", () => {
     expect(order).toEqual(["flush", "signout:false"]);
     expect(saved("alice", S2)).toBe(false);
     expect(saved("bob", S1)).toBe(true);
+  });
+
+  describe("unsent workout data at sign-out", () => {
+    const signOutButton = () => screen.getByRole("button", { name: "Sign out" });
+
+    it("asks nothing when everything was sent", async () => {
+      render(<SignOutButton userId="alice" />);
+      await userEvent.click(signOutButton());
+      await waitFor(() => expect(signOut).toHaveBeenCalled());
+      expect(screen.queryByTestId("unsent-choice")).toBeNull();
+      expect(discardOutbox).not.toHaveBeenCalled();
+    });
+
+    it("offers keep or discard in the page, and signs out only after the choice", async () => {
+      seed();
+      flushBeforeSignOut.mockResolvedValue({ pending: 3 });
+      render(<SignOutButton userId="alice" />);
+      await userEvent.click(signOutButton());
+      const choice = await screen.findByRole("alertdialog");
+      expect(choice.textContent).toContain("3 workout items haven't been sent yet");
+      expect(signOut).not.toHaveBeenCalled();
+      expect(saved("alice", S1)).toBe(true);
+
+      await userEvent.click(within(choice).getByRole("button", { name: "Keep on this device" }));
+      await waitFor(() => expect(signOut).toHaveBeenCalled());
+      expect(discardOutbox).not.toHaveBeenCalled();
+      expect(saved("alice", S1)).toBe(false); // the screen ledger still goes
+    });
+
+    it("discard deletes the member's on-device outbox before signing out", async () => {
+      const order: string[] = [];
+      flushBeforeSignOut.mockResolvedValue({ pending: 1 });
+      discardOutbox.mockImplementation(async () => void order.push("discard"));
+      signOut.mockImplementation(async () => void order.push("signout"));
+      render(<SignOutButton userId="alice" />);
+      await userEvent.click(signOutButton());
+      await userEvent.click(await screen.findByRole("button", { name: "Discard" }));
+      await waitFor(() => expect(signOut).toHaveBeenCalled());
+      expect(discardOutbox).toHaveBeenCalledWith("alice");
+      expect(order).toEqual(["discard", "signout"]);
+    });
+
+    it("is disabled (and does nothing) while the header is still loading", async () => {
+      render(<SignOutButton disabled />);
+      expect((signOutButton() as HTMLButtonElement).disabled).toBe(true);
+      await userEvent.click(signOutButton());
+      expect(signOut).not.toHaveBeenCalled();
+    });
   });
 });

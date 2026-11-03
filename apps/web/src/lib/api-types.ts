@@ -66,6 +66,14 @@ export type WorkoutSession = WorkoutSessionBrief & {
   note: string | null;
   /** present once the session is completed; shape is the SessionSummary contract */
   summary: SessionSummary | null;
+  /**
+   * While the session is started: per exercise, the set indexes, skip and highest set index the
+   * server has stored (`{}` for a new session); null once completed.
+   */
+  progress?: Record<
+    string,
+    { set_indexes: number[]; skipped: boolean; highest_set_index: number | null }
+  > | null;
 };
 export type WorkoutSessionPage = {
   items: WorkoutSessionBrief[];

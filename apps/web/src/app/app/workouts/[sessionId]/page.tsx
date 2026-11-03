@@ -1,12 +1,11 @@
-import type { ExerciseContract } from "@fitpilot/exercise-contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { capitalise } from "@/features/plans/labels";
-import { canTrackLive } from "@/features/exercise-library/ExerciseGuide";
-import { type RunnerExercise, WorkoutRunner } from "@/features/workouts/WorkoutRunner";
+import { resolveRunnerExercises } from "@/features/workouts/runner-exercises";
+import { WorkoutRunner } from "@/features/workouts/WorkoutRunner";
 import { getMe, getMyProfile, getWorkoutSession, listExercises } from "@/lib/api";
 import { hasCurrentTrackingConsent } from "@/lib/api-types";
 import { getPlan } from "@/lib/api-plans";
@@ -46,20 +45,15 @@ async function Workout({ params }: Pick<PageProps<"/app/workouts/[sessionId]">, 
   const day = plan?.plan?.days[session.plan_day_index];
   if (!day) return <Notice>This workout&apos;s plan day is no longer available.</Notice>;
 
-  const byId = new Map<string, ExerciseContract>(catalogue.map((e) => [e.id, e]));
-  const exercises: RunnerExercise[] = day.exercises.map((planned) => {
-    const e = byId.get(planned.exercise_id);
-    return {
-      id: planned.exercise_id,
-      name: e?.name ?? planned.exercise_id.replaceAll("_", " "),
-      hasDemo: e?.animation != null,
-      tracked: e ? canTrackLive(e) : false,
-      prescription: e?.prescription ?? (planned.reps !== null ? "reps" : "duration"),
-      instructions: e?.instructions ?? ["Follow the exercise page for the steps."],
-      required_landmarks: e?.required_landmarks ?? [],
-      planned,
-    };
-  });
+  const { exercises, missing } = resolveRunnerExercises(day.exercises, catalogue);
+  if (missing.length) {
+    return (
+      <Notice>
+        This exercise isn&apos;t in the catalogue any more ({missing.join(", ")}), so this workout
+        can&apos;t be logged. Ask your trainer or generate a new plan.
+      </Notice>
+    );
+  }
 
   return (
     <>
@@ -73,6 +67,7 @@ async function Workout({ params }: Pick<PageProps<"/app/workouts/[sessionId]">, 
         userId={me.id}
         sessionId={sessionId}
         exercises={exercises}
+        serverProgress={session.progress ?? null}
         trackingConsent={hasCurrentTrackingConsent(profile)}
       />
     </>

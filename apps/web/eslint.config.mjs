@@ -5,6 +5,12 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // Features may not depend on each other in a loop (live-coaching <-> workouts was one): the
+  // wiring between them lives in the feature that owns the data (workouts/LiveSessionCoach).
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: { "import/no-cycle": ["error", { maxDepth: 10 }] },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

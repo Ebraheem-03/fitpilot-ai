@@ -7,6 +7,7 @@ import {
   nextSetIndex,
   parseProgress,
   recordSet,
+  seedFromServer,
   serialiseProgress,
   skipExercise,
 } from "./progress";
@@ -96,5 +97,52 @@ describe("persistence", () => {
     expect(parseProgress(raw)).toEqual({
       exercises: { plank: { sets: [manual(0)], skipped: true } },
     });
+  });
+});
+
+describe("seedFromServer (a lost or missing ledger)", () => {
+  it("does nothing without server progress or when the ledger is already ahead", () => {
+    const p = recordSet(emptyProgress(), "plank", manual(0));
+    expect(seedFromServer(p, null)).toBe(p);
+    expect(
+      seedFromServer(p, { plank: { set_indexes: [0], skipped: false, highest_set_index: 0 } }),
+    ).toEqual({
+      exercises: { plank: { sets: [manual(0)], skipped: false, next_floor: 1 } },
+    });
+  });
+
+  it("an empty ledger resumes after the sets the server holds, never reusing an index", () => {
+    const seeded = seedFromServer(emptyProgress(), {
+      glute_bridge: { set_indexes: [0, 1], skipped: false, highest_set_index: 1 },
+    });
+    expect(exerciseState(seeded, day[2]!)).toBe("in_progress");
+    expect(currentStep(seeded, day)?.setNumber).toBe(1); // squat, untouched
+    expect(nextSetIndex(seeded, "glute_bridge")).toBe(2);
+  });
+
+  it("a camera set the server only has reps for still reserves its index", () => {
+    const seeded = seedFromServer(emptyProgress(), {
+      bodyweight_squat: { set_indexes: [0], skipped: false, highest_set_index: 3 },
+    });
+    expect(nextSetIndex(seeded, "bodyweight_squat")).toBe(4);
+    expect(seeded.exercises.bodyweight_squat!.sets).toHaveLength(1);
+  });
+
+  it("keeps the server's skip, unless the member has saved a set since", () => {
+    const skipped = seedFromServer(emptyProgress(), {
+      plank: { set_indexes: [], skipped: true, highest_set_index: null },
+    });
+    expect(exerciseState(skipped, day[1]!)).toBe("skipped");
+    const withSet = seedFromServer(emptyProgress(), {
+      plank: { set_indexes: [0], skipped: true, highest_set_index: 0 },
+    });
+    expect(exerciseState(withSet, day[1]!)).toBe("done");
+  });
+
+  it("is idempotent, and the floor survives storage", () => {
+    const server = { plank: { set_indexes: [2], skipped: false, highest_set_index: 5 } };
+    const once = seedFromServer(emptyProgress(), server);
+    expect(seedFromServer(once, server)).toBe(once);
+    expect(nextSetIndex(parseProgress(serialiseProgress(once)), "plank")).toBe(6);
   });
 });

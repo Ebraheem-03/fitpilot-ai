@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withdrawTrackingConsent } from "./actions";
@@ -34,7 +35,12 @@ export function TrackingConsentSetting({ consented }: { consented: boolean }) {
             are saved to your account after each camera set. Video and body points are never saved.
           </p>
           <p className="text-sm text-muted">
-            Withdrawing stops saving from now on. Sessions already saved stay until you delete them.
+            Withdrawing stops saving from now on. Sessions already saved stay until you delete them
+            from your{" "}
+            <Link href="/app/workouts" className="font-medium underline">
+              workout history
+            </Link>
+            .
           </p>
           {error && (
             <p role="alert" className="text-sm text-danger">

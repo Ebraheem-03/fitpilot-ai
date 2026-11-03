@@ -3,7 +3,8 @@ import { IDBFactory } from "fake-indexeddb";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../actions", () => ({ sendEvents: vi.fn() }));
-const { flushBeforeSignOut, getOutbox, resetOutboxForTests } = await import("./browser");
+const { discardOutbox, resumeOutbox, flushBeforeSignOut, getOutbox, resetOutboxForTests } =
+  await import("./browser");
 
 const SESSION = "11111111-1111-4111-8111-111111111111";
 const event = (key: string): SessionEvent => ({
@@ -79,6 +80,71 @@ describe("flushBeforeSignOut", () => {
     ]);
     const done = flushBeforeSignOut("user-a", 3000);
     await vi.advanceTimersByTimeAsync(3000);
-    await expect(done).resolves.toBeUndefined();
+    await expect(done).resolves.toEqual({ pending: 1 });
+  });
+});
+
+describe("sign-out on a shared device", () => {
+  const dbNames = async (idb: IDBFactory) => (await idb.databases()).map((d) => d.name);
+
+  it("reports nothing pending once everything is sent", async () => {
+    const send = vi.fn(async () => ({ ok: true }) as const);
+    getOutbox("user-a", { indexedDB: new IDBFactory(), send });
+    await expect(flushBeforeSignOut("user-a")).resolves.toEqual({ pending: 0 });
+  });
+
+  it("keep: what could not be sent stays under the member, quarantined records are gone", async () => {
+    const idb = new IDBFactory();
+    let reject = true;
+    const send = vi.fn(async (_id: string, events: unknown[]) => {
+      if (!reject) return { ok: true } as const;
+      const keys = (events as SessionEvent[]).map((e) => e.idempotency_key);
+      return keys.some((k) => k.startsWith("bad"))
+        ? ({ ok: false, kind: "session_not_found" } as const)
+        : ({ ok: false, kind: "transient" } as const);
+    });
+    const a = getOutbox("user-a", { indexedDB: idb, send });
+    await a.enqueue([event("bad-set-0000001")]);
+    await a.flush();
+    expect((await a.quarantined()).length).toBe(1);
+    await a.enqueue([event("good-set-000001")]);
+
+    const res = await flushBeforeSignOut("user-a", 50);
+    expect(res).toEqual({ pending: 1 });
+    expect(await a.quarantined()).toEqual([]);
+    expect(await dbNames(idb)).toContain("fitpilot-outbox-user-a");
+
+    // next sign-in: the kept record is still there and goes out under the same member
+    reject = false;
+    resetOutboxForTests();
+    expect(await getOutbox("user-a", { indexedDB: idb, send }).flush()).toBe("sent");
+  });
+
+  it("discard: no fitpilot-outbox database is left, and a later sign-in starts empty", async () => {
+    const idb = new IDBFactory();
+    const send = vi.fn(async () => ({ ok: false, kind: "transient" }) as const);
+    const a = getOutbox("user-a", { indexedDB: idb, send });
+    await a.enqueue([event("a-set-0000009")]);
+    expect(await dbNames(idb)).toContain("fitpilot-outbox-user-a");
+
+    await discardOutbox("user-a", { indexedDB: idb });
+
+    expect((await dbNames(idb)).filter((n) => n?.startsWith("fitpilot-outbox-"))).toEqual([]);
+    expect(await getOutbox("user-a", { indexedDB: idb, send }).pendingCount()).toBe(0);
+  });
+
+  it("discard: code still mounted on the page cannot re-create the deleted database", async () => {
+    const idb = new IDBFactory();
+    const send = vi.fn(async () => ({ ok: false, kind: "transient" }) as const);
+    await getOutbox("user-a", { indexedDB: idb, send }).enqueue([event("a-set-0000010")]);
+    await discardOutbox("user-a", { indexedDB: idb });
+
+    await getOutbox("user-a", { indexedDB: idb, send }).pendingCount(); // e.g. the runner's poll
+    expect((await dbNames(idb)).filter((n) => n?.startsWith("fitpilot-outbox-"))).toEqual([]);
+
+    // signing in again brings the real, persistent outbox back
+    resumeOutbox("user-a");
+    await getOutbox("user-a", { indexedDB: idb, send }).enqueue([event("a-set-0000011")]);
+    expect(await dbNames(idb)).toContain("fitpilot-outbox-user-a");
   });
 });
