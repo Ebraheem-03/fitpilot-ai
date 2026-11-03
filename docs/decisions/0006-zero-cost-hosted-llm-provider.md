@@ -54,7 +54,13 @@ Validation order: Pydantic schema, then catalogue, equipment, days/week, reps-vs
 1. **Default hosted provider: Groq free tier.** `LLM_PROVIDER=groq`, `LLM_MODEL=openai/gpt-oss-120b`. Enable Zero Data Retention in the Groq console before any real profile data flows.
 2. **Default model is `openai/gpt-oss-120b`; `gpt-oss-20b` is not a fallback.** 20b missed the gate at 94% after repair. Falling back to it on 429 would double capacity but trade validity for availability. If that's ever wanted, the eval suite must show it first.
 3. **Plan generation call settings:**
-   - `reasoning_effort: low` (S5's eval suite confirms this against medium on ~20 profiles before M3 closes; fall back to medium if validity drops);
+   - `reasoning_effort: low`. **Confirmed by the M3 S5 eval suite on 2026-10-29** ([report](../evaluation/plans-plan-v1.md), prompt `plan-v1`, 20 synthetic profiles). Results:
+     - 35/35 feasible plans valid after one repair, 31/35 on the first try.
+     - 0 constraint violations in the 37 accepted plans.
+     - The infeasible profile escalated; no feasible one did.
+     - Medium, on 8 plans, was also 100% valid but used 59% more completion tokens per plan and was slower (p95 13.0 s vs 9.4 s).
+     - The first-try failures at low were Groq `json_validate_failed` (3) and one repeated exercise on a 7-day × 180-min plan, all repaired.
+     - Fall back to medium only if a later run's validity after repair drops below the gate (95%);
    - `max_completion_tokens: 6000`;
    - `include_reasoning: false`;
    - strict `json_schema` with `exercise_id` as an enum of the catalogue.

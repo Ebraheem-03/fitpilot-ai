@@ -68,9 +68,10 @@ export async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function getMe(): Promise<Me> {
+/** The signed-in member. Deduplicated per request (the shell, nav and pages all ask). */
+export const getMe = cache(async (): Promise<Me> => {
   return json<Me>(await apiFetch("/users/me"));
-}
+});
 
 export async function getMyProfile(): Promise<Profile | null> {
   const res = await apiFetch("/profiles/me");

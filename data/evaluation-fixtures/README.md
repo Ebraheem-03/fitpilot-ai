@@ -162,3 +162,42 @@ The recorded fixtures come from 25 stock videos on [Pexels](https://www.pexels.c
 ## ai/
 
 Versioned member profiles + requests + expected properties for the AI eval suite (blueprint §10). Synthetic people only — no real personal data.
+
+### ai/plans/ (plan generation, FR-02, M3 S5)
+
+```
+ai/plans/suite.json            # suite_version, gate, profiles with expected properties
+ai/plans/offline-replies.json  # scripted fake-provider replies for the offline run
+```
+
+A profile holds exactly the five fields the plan generator may see (`PlanInputs`), plus what a good result must look like. **Expected properties, never exact plans**: the model may pick any valid plan.
+
+```json
+{
+  "id": "p02_strength_intermediate_dumbbells",
+  "description": "Dumbbells should show up in the plan.",
+  "inputs": {
+    "primary_goal": "strength",
+    "experience_level": "intermediate",
+    "days_per_week": 4,
+    "session_minutes": 45,
+    "equipment": ["dumbbells"]
+  },
+  "expect": { "outcome": "active", "min_fill": 0.5, "uses_equipment": ["dumbbells"] }
+}
+```
+
+- `inputs` use the profile enums (`Goal`, `ExperienceLevel`, `Equipment`), days 1–7, minutes up to 180. Any other field fails the loader, so a name or a health note can't slip in.
+- `expect.outcome`:
+  - `active`: feasible. The plan must be accepted (first try or after the one repair); escalating it counts as a false escalation.
+  - `needs_review`: infeasible. The generator must escalate. `p20` asks for 5-minute sessions, which the 5-minute warm-up already fills. That's below the API's 10-minute floor on purpose, to prove infeasible input is never silently accepted. The loader allows minutes under 10 only for `needs_review` profiles.
+  - `either`: both are acceptable (7 days × 10 min). Reported, not scored for escalation.
+- `expect.min_fill` (optional): the shortest day's estimated minutes ÷ `session_minutes` should reach this. `expect.uses_equipment` (optional): owned equipment the plan should use at least once. Both are **reported, not gated**: the prompt asks for 60–100% fill but doesn't require any equipment.
+- Hard constraints (catalogue, equipment, days, session length, prescription) apply to every profile and aren't listed. The scorer re-checks every accepted plan independently of `plans/validation.py`.
+- `gate` is the pass bar for a run (`services/api/app/services/evaluation/plan_suite.py::gate_failures`). It can't pass vacuously: it needs `min_scored_plans` scored plans and at least one escalation-expected plan.
+- The loader fails on duplicate ids, two profiles with identical inputs, `uses_equipment` the profile doesn't own, or a suite without an escalation-expected profile.
+- Changing a profile, the expectations or the gate means bumping `suite_version`.
+
+`offline-replies.json` maps a profile id to the replies for one `generate_plan` call, in order. Once they run out, the rule-based fake planner answers. Kinds: `planner` (optionally with `mutate`: `drop_day`, `unknown_exercise`, `add_dumbbells`, `overlong`), `json_validate_failed`, `rate_limited` (`retry_after_s`), `busy`, `unavailable`. The scripted outcomes are known (invalid → repaired, invalid → escalated, a recovered 429), so `tests/test_eval_plans.py` asserts the exact metrics and the scorer itself is tested.
+
+Runs: offline in `make verify` (pytest). Live with `make eval-ai` (Groq, never in CI), which writes `docs/evaluation/plans-<prompt_version>.{md,json}`.

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { getMe } from "@/lib/api";
 import { OutboxHarness } from "@/features/workouts/dev/OutboxHarness";
 import { OutboxBoot } from "@/features/workouts/outbox/OutboxBoot";
 
@@ -10,13 +11,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function Harness({ searchParams }: Pick<PageProps<"/dev/outbox">, "searchParams">) {
   await connection();
+  const me = await getMe();
   const raw = (await searchParams).session;
   const sessionId = typeof raw === "string" && UUID.test(raw) ? raw : null;
   return (
     <>
       {/* the member shell mounts this on every /app page; the harness stands in for it */}
-      <OutboxBoot />
-      <OutboxHarness sessionId={sessionId} />
+      <OutboxBoot userId={me.id} />
+      <OutboxHarness sessionId={sessionId} userId={me.id} />
     </>
   );
 }

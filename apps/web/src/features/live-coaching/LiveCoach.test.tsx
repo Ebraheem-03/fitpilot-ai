@@ -141,7 +141,7 @@ describe("LiveCoach (FR-04 UI)", () => {
   });
 
   it("asks for consent before a session's first tracked set, in plain words, and blocks the camera until answered", async () => {
-    render(<LiveCoach exercise={exercise} sessionId="s-1" />);
+    render(<LiveCoach exercise={exercise} sessionId="s-1" userId="u-1" />);
     expect(screen.getByTestId("tracking-consent").textContent).toContain(
       "We'll save your rep counts, rep timing, tracking quality and the measurements behind each cue to your account — never video or body points.",
     );
@@ -157,7 +157,7 @@ describe("LiveCoach (FR-04 UI)", () => {
 
   it("records consent through the server action when the member agrees", async () => {
     const { setTrackingConsent } = await import("../workouts/actions");
-    render(<LiveCoach exercise={exercise} sessionId="s-1" />);
+    render(<LiveCoach exercise={exercise} sessionId="s-1" userId="u-1" />);
     await act(async () =>
       fireEvent.click(screen.getByRole("button", { name: "Save my tracking data" })),
     );
@@ -166,7 +166,7 @@ describe("LiveCoach (FR-04 UI)", () => {
   });
 
   it("does not ask again once consent is on record", () => {
-    render(<LiveCoach exercise={exercise} sessionId="s-1" trackingConsent />);
+    render(<LiveCoach exercise={exercise} sessionId="s-1" userId="u-1" trackingConsent />);
     expect(screen.queryByTestId("tracking-consent")).toBeNull();
   });
 
@@ -207,7 +207,7 @@ describe("LiveCoach (FR-04 UI)", () => {
   });
 
   it("holds the outbox while the camera is on and releases it when the camera stops", async () => {
-    render(<LiveCoach exercise={exercise} sessionId="s-1" trackingConsent />);
+    render(<LiveCoach exercise={exercise} sessionId="s-1" userId="u-1" trackingConsent />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
     expect(outbox.holds.at(-1)).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
@@ -459,6 +459,7 @@ describe("LiveCoach cues + post-set summary (FR-06)", () => {
       <LiveCoach
         exercise={exercise}
         sessionId={sessionId}
+        userId="u-1"
         sink={sink}
         setIndex={2}
         trackingConsent
@@ -478,7 +479,7 @@ describe("LiveCoach cues + post-set summary (FR-06)", () => {
     const sessionId = "6f1c1f0e-7a52-4c47-9a39-2b7d0e6f3a11";
 
     it("with consent: nothing is sent while the camera runs; the set is sent once it stops", async () => {
-      render(<LiveCoach exercise={exercise} sessionId={sessionId} trackingConsent />);
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} userId="u-1" trackingConsent />);
       await start();
       await advance(FIRST_CUE_MS);
       expect(coach().dataset.session).toBe("running");
@@ -495,7 +496,7 @@ describe("LiveCoach cues + post-set summary (FR-06)", () => {
     });
 
     it("without consent: tracking works but no tracked event is stored or sent", async () => {
-      render(<LiveCoach exercise={exercise} sessionId={sessionId} />);
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} userId="u-1" />);
       fireEvent.click(screen.getByRole("button", { name: /Don't save/ }));
       await start();
       await advance(FIRST_CUE_MS);
@@ -506,6 +507,42 @@ describe("LiveCoach cues + post-set summary (FR-06)", () => {
       });
       expect(await outbox.instance!.pendingCount()).toBe(0);
       expect(outbox.sends).toEqual([]);
+    });
+
+    it("pressing Start waits for an upload already in flight before the camera is asked for", async () => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const idle = vi.spyOn(outbox.instance!, "idle").mockImplementation(() => gate);
+      const getUserMedia = vi.fn(env.camera!);
+      env.camera = getUserMedia;
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} userId="u-1" trackingConsent />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Start camera" }));
+      await act(async () => {});
+      expect(idle).toHaveBeenCalledTimes(1);
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(coach().dataset.session).toBe("idle");
+
+      await act(async () => release());
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+      expect(coach().dataset.session).toBe("running");
+    });
+
+    it("holds the outbox from the moment the permission prompt is up", async () => {
+      env.camera = () => new Promise<MediaStream>(() => {}); // the member hasn't answered yet
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} userId="u-1" trackingConsent />);
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
+      expect(coach().dataset.session).toBe("requesting");
+      expect(outbox.holds.at(-1)).toBe(true);
+    });
+
+    it("lets uploads resume when the camera could not be started", async () => {
+      env.camera = () => Promise.reject(new DOMException("no", "NotAllowedError"));
+      render(<LiveCoach exercise={exercise} sessionId={sessionId} userId="u-1" trackingConsent />);
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
+      expect(coach().dataset.session).toBe("error");
+      expect(outbox.holds.at(-1)).toBe(false);
+      expect(outbox.instance!.isHeld).toBe(false);
     });
 
     it("practice mode stores and sends nothing", async () => {

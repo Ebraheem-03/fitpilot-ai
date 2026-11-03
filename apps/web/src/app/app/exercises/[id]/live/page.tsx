@@ -5,8 +5,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { analyzerFor } from "@/features/live-coaching/analyzers";
 import { LiveCoach } from "@/features/live-coaching/LiveCoach";
-import { getExercise, getMyProfile, getWorkoutSession } from "@/lib/api";
-import { TRACKING_CONSENT_VERSION } from "@/lib/api-types";
+import { getExercise, getMe, getMyProfile, getWorkoutSession } from "@/lib/api";
+import { hasCurrentTrackingConsent } from "@/lib/api-types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -43,14 +43,13 @@ async function Live({
   let consent = false;
   if (sessionId !== undefined) {
     if (!UUID.test(sessionId) || !(await getWorkoutSession(sessionId))) notFound();
-    const profile = await getMyProfile();
-    consent =
-      profile?.tracking_data_consent_at != null &&
-      (profile.tracking_data_consent_version ?? 0) >= TRACKING_CONSENT_VERSION;
+    consent = hasCurrentTrackingConsent(await getMyProfile());
   }
+  const me = sessionId !== undefined ? await getMe() : null;
   return (
     <LiveCoach
       sessionId={sessionId}
+      userId={me?.id}
       trackingConsent={consent}
       exercise={{
         id: exercise.id,
