@@ -229,9 +229,10 @@ test("EXIT: plan -> demo -> tracked workout -> saved summary; another member is 
       // status of the document itself is already 200 by then).
       await b.goto(url);
       await expect(b.getByText(NOT_FOUND)).toBeVisible();
+      for (const id of ["session-summary", "workout-runner", "plan-view"]) {
+        await expect(b.getByTestId(id)).toHaveCount(0);
+      }
     }
-    await expect(b.getByTestId("session-summary")).toHaveCount(0);
-    await expect(b.getByTestId("plan-view")).toHaveCount(0);
   } finally {
     await other.close();
   }
