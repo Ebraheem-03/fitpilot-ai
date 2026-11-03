@@ -50,3 +50,6 @@ apps/web/public/mediapipe/
 
 # generated synthetic camera feed for live-coaching e2e (ADR-0010)
 apps/web/tests/e2e/.generated/
+
+# Claude Code agent worktrees (local only)
+.claude/worktrees/

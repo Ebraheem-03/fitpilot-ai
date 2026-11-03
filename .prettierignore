@@ -20,3 +20,6 @@ apps/web/public/mediapipe
 
 # vision fixtures: machine-written landmark data, kept minified (labels stay formatted)
 data/evaluation-fixtures/vision/**/*.landmarks.json
+
+# Claude Code agent worktrees (local only)
+.claude/worktrees
