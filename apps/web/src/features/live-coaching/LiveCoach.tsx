@@ -1,11 +1,16 @@
 "use client";
 import type { LandmarkName, SessionEvent } from "@fitpilot/exercise-contracts";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { phaseLabel } from "../exercise-viewer/labels";
-import { TrackingConsentStep } from "../workouts/TrackingConsentStep";
-import { getOutbox } from "../workouts/outbox/browser";
-import { createEventSink } from "../workouts/outbox/sink";
 import { analyzerFor } from "./analyzers";
 import { CueCard } from "./CueCard";
 import { browserDeps } from "./engine/browser";
@@ -30,6 +35,23 @@ declare global {
   }
 }
 
+/**
+ * What this component needs from the on-device outbox (ADR-0011). It is a port: the workouts
+ * feature owns the real outbox and passes it in, so live-coaching never imports workouts.
+ */
+export interface SetOutbox {
+  /**
+   * Queues recorded events on the device. Without `consented`, the implementation must drop the
+   * camera-derived (tracked) events; manual ones always go through (ADR-0011 §4).
+   */
+  enqueue(events: readonly SessionEvent[], consented: boolean): void;
+  /** Nothing is sent while the camera is on. */
+  holdWhile(hold: boolean): void;
+  /** Resolves when no upload is in flight. */
+  idle(): Promise<void>;
+  flush(sessionId?: string): Promise<unknown>;
+}
+
 export interface LiveCoachProps {
   exercise: LiveExercise;
   /**
@@ -37,8 +59,13 @@ export interface LiveCoachProps {
    * for the post-set summary and stay on this page.
    */
   sessionId?: string;
-  /** The signed-in member: events queue in their own on-device outbox (never another member's). */
-  userId?: string;
+  /**
+   * The signed-in member's on-device outbox (never another member's). With a `sessionId`, each
+   * batch of recorded events is queued here; without one nothing is saved.
+   */
+  outbox?: SetOutbox;
+  /** The consent question, shown before the first saved set (the workouts feature supplies it). */
+  renderConsent?: (onDecision: (saveTrackingData: boolean) => void) => ReactNode;
   /**
    * Receives each batch of recorded events, only with a `sessionId` (S7: the on-device outbox,
    * flushed after the camera stops; ADR-0011). Nothing in this component sends anything.
@@ -92,7 +119,8 @@ const primary =
 export function LiveCoach({
   exercise,
   sessionId,
-  userId,
+  outbox,
+  renderConsent,
   sink,
   trackingConsent = false,
   consentDeclined = false,
@@ -132,13 +160,7 @@ export function LiveCoach({
     const video = videoRef.current!;
     const create = analyzerFor(exercise.id)!;
     const required = requiredKey.split(",") as LandmarkName[];
-    const outboxSink =
-      sessionId !== undefined && userId !== undefined
-        ? createEventSink({
-            outbox: getOutbox(userId),
-            hasConsent: () => consentRef.current === "granted",
-          })
-        : null;
+    const saveTo = sessionId !== undefined ? outbox : undefined;
     const recorder = new SessionRecorder({
       exerciseId: exercise.id,
       sessionId,
@@ -147,7 +169,7 @@ export function LiveCoach({
         // With a session, events wait in the on-device outbox (ADR-0011): enqueue only; the
         // outbox is held while the camera runs and flushes after it stops. Without consent the
         // tracked events are dropped here.
-        outboxSink?.(events);
+        saveTo?.enqueue(events, consentRef.current === "granted");
       },
       firstSetIndex: setIndex,
     });
@@ -157,7 +179,7 @@ export function LiveCoach({
       e.dispose(); // leaving the page always turns the camera off
       delete window.__fitpilotLiveEvents;
     };
-  }, [exercise.id, requiredKey, sessionId, userId, setIndex]);
+  }, [exercise.id, requiredKey, sessionId, outbox, setIndex]);
 
   const snap = useSyncExternalStore(
     engine?.subscribe ?? noop,
@@ -170,7 +192,7 @@ export function LiveCoach({
   // The hold starts before the camera does ("requesting" is the permission prompt), so nothing
   // can go out between pressing Start and the camera being on.
   const holdOutbox = cameraOn || session.status === "requesting";
-  const saving = sessionId !== undefined && userId !== undefined;
+  const saving = sessionId !== undefined && outbox !== undefined;
   const ended = session.status === "stopped" || session.status === "error";
   const summary = useMemo(() => (ended ? summariseSet(events) : null), [ended, events]);
   const reportedSet = useRef<string | null>(null);
@@ -184,8 +206,8 @@ export function LiveCoach({
     onSetCompleteRef.current?.(summary, events);
     // The set is over and the camera is off (stop, or it failed): send what it recorded. The
     // outbox is still held for a render at most; releasing it flushes too, and repeats are no-ops.
-    if (saving) void getOutbox(userId).flush(sessionId);
-  }, [summary, events, sessionId, userId, saving]);
+    if (saving) void outbox?.flush(sessionId);
+  }, [summary, events, sessionId, outbox, saving]);
 
   // e2e only (tests/e2e/live-cues.spec.ts): the current set's practice-mode events, readable by
   // the test in the page. Never in a production build, never for a real session.
@@ -202,22 +224,22 @@ export function LiveCoach({
   // the set (ADR-0011 §2).
   useEffect(() => {
     if (!saving) return;
-    getOutbox(userId).holdWhile(holdOutbox);
-  }, [saving, userId, holdOutbox]);
+    outbox?.holdWhile(holdOutbox);
+  }, [saving, outbox, holdOutbox]);
   useEffect(() => {
     if (!saving) return;
-    return () => getOutbox(userId).holdWhile(false);
-  }, [saving, userId]);
+    return () => outbox?.holdWhile(false);
+  }, [saving, outbox]);
 
   // Start: first wait out an upload that is already in flight (a set that just ended), so the
   // camera is never on while a request is on the wire (ADR-0011 §2).
   async function startCamera() {
     if (!engine) return;
-    if (saving) await getOutbox(userId).idle();
+    if (saving) await outbox?.idle();
     await engine.start();
     // A start that didn't turn the camera on (blocked, failed): let the outbox send again.
     if (saving && !isCameraActive(engine.getSnapshot().session.status)) {
-      getOutbox(userId).holdWhile(false);
+      outbox?.holdWhile(false);
     }
   }
 
@@ -301,14 +323,11 @@ export function LiveCoach({
               tracking is reliable.
             </li>
           </ul>
-          {consentPending && (
-            <TrackingConsentStep
-              onDecision={(save) => {
-                setConsent(save ? "granted" : "declined");
-                onConsentChange?.(save);
-              }}
-            />
-          )}
+          {consentPending &&
+            renderConsent?.((save) => {
+              setConsent(save ? "granted" : "declined");
+              onConsentChange?.(save);
+            })}
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"

@@ -42,8 +42,8 @@ interface StubProps {
   onSetComplete?: (summary: SetSummary, events: readonly never[]) => void;
 }
 const liveProps: StubProps[] = [];
-vi.mock("../live-coaching/LiveCoach", () => ({
-  LiveCoach: (props: StubProps) => {
+vi.mock("./LiveSessionCoach", () => ({
+  LiveSessionCoach: (props: StubProps) => {
     liveProps.push(props);
     const summary = (reps: number): SetSummary => ({
       exercise_id: "bodyweight_squat",

@@ -47,7 +47,7 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
               <RoleNav />
             </Suspense>
           </div>
-          <Suspense fallback={<SignOutButton />}>
+          <Suspense fallback={<SignOutButton disabled />}>
             <SessionControls />
           </Suspense>
         </div>

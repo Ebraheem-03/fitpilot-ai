@@ -10,11 +10,11 @@ import { SKIP_REASONS } from "@fitpilot/exercise-contracts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LiveCoach } from "../live-coaching/LiveCoach";
 import type { SetSummary } from "../live-coaching/recording/summary";
 import { completeSession } from "./actions";
 import { manualSetEvent, skipEvent, trackedSetRatingEvent } from "./events";
 import { MEDICAL_NOTE, SKIP_LABELS, targetLabel } from "./labels";
+import { LiveSessionCoach } from "./LiveSessionCoach";
 import { getOutbox } from "./outbox/browser";
 import {
   counts,
@@ -536,7 +536,7 @@ function SetEntry({
   const saveWithCamera = counted !== null && consent === "granted";
   return (
     <div className="flex flex-col gap-3" data-testid="camera-set">
-      <LiveCoach
+      <LiveSessionCoach
         exercise={{
           id: exercise.id,
           name: exercise.name,

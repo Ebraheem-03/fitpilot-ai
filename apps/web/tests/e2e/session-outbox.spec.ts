@@ -66,6 +66,36 @@ test("a set finished with no network is sent once after the page is reloaded and
   expect(finished).toHaveLength(1); // stored once, not re-sent by the retry timer or the reload
 });
 
+const outboxDatabases = (page: Page) =>
+  page.evaluate(async () =>
+    (await indexedDB.databases())
+      .map((d) => d.name ?? "")
+      .filter((n) => n.startsWith("fitpilot-outbox-")),
+  );
+
+test("signing out with an unsent set asks; discarding leaves no workout data on the device", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signUp(page);
+  await startWorkout(page);
+
+  await page.route("**/*", (route) =>
+    isEventUpload(route.request()) ? route.abort("internetdisconnected") : route.continue(),
+  );
+  await logFirstSetByHand(page);
+  await expect(pending(page)).toHaveAttribute("data-pending", "1", { timeout: 10_000 });
+  expect(await outboxDatabases(page)).toHaveLength(1);
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  const choice = page.getByRole("alertdialog");
+  await expect(choice).toContainText("1 workout item hasn't been sent yet");
+  await choice.getByRole("button", { name: "Discard" }).click();
+
+  await expect(page).toHaveURL(/\/sign-in$/);
+  expect(await outboxDatabases(page)).toEqual([]);
+});
+
 test("going offline mid-workout, then reconnecting, saves the set once; completing waits for it", async ({
   page,
   context,

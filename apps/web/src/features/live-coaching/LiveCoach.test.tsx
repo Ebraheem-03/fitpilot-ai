@@ -3,14 +3,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { LandmarkFixture, type SessionEvent } from "@fitpilot/exercise-contracts";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { StrictMode } from "react";
+import { StrictMode, useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { feedFrameAt, type FeedPlan, SHALLOW_MOTION } from "./bench/feed-timeline";
 import type { EngineDeps } from "./engine/engine";
 import { FixtureReplayPoseSource } from "./engine/testing/fixture-source";
 import { Outbox } from "../workouts/outbox/outbox";
 import { MemoryStore } from "../workouts/outbox/store";
-import { LiveCoach } from "./LiveCoach";
+import { TrackingConsentStep } from "../workouts/TrackingConsentStep";
+import { createEventSink } from "../workouts/outbox/sink";
+import { LiveCoach as BareLiveCoach, type LiveCoachProps, type SetOutbox } from "./LiveCoach";
 
 const FIXTURE = join(
   __dirname,
@@ -52,11 +54,32 @@ const outbox = vi.hoisted(() => ({
   sends: [] as { types: string[]; cameraRunning: boolean }[],
   instance: null as null | import("../workouts/outbox/outbox").Outbox,
 }));
-vi.mock("../workouts/outbox/browser", () => ({ getOutbox: () => outbox.instance! }));
 vi.mock("../workouts/actions", () => ({
   setTrackingConsent: vi.fn(async () => ({ ok: true, data: {} })),
   sendEvents: vi.fn(),
 }));
+
+/** The wiring the workouts feature does (`LiveSessionCoach`), over the test's in-memory outbox. */
+function LiveCoach({ userId, ...props }: Omit<LiveCoachProps, "outbox"> & { userId?: string }) {
+  const port = useMemo<SetOutbox | undefined>(() => {
+    if (userId === undefined) return undefined;
+    const real = outbox.instance!;
+    return {
+      enqueue: (events, consented) =>
+        createEventSink({ outbox: real, hasConsent: () => consented })(events),
+      holdWhile: (hold) => real.holdWhile(hold),
+      idle: () => real.idle(),
+      flush: (id) => real.flush(id),
+    };
+  }, [userId]);
+  return (
+    <BareLiveCoach
+      {...props}
+      outbox={port}
+      renderConsent={(d) => <TrackingConsentStep onDecision={d} />}
+    />
+  );
+}
 
 const exercise = {
   id: "bodyweight_squat",

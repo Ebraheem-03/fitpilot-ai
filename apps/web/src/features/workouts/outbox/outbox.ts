@@ -140,6 +140,11 @@ export class Outbox {
     this.cancelRetry = null;
   }
 
+  /** Deletes every quarantined record: they were rejected by the server and will never be sent. */
+  async discardQuarantined(): Promise<void> {
+    await this.o.store.pruneQuarantined(Number.POSITIVE_INFINITY);
+  }
+
   get isHeld(): boolean {
     return this.held;
   }

@@ -43,7 +43,11 @@ export function clearStoredProgress(userId: string, sessionId: string) {
   window.dispatchEvent(new Event(CHANGED));
 }
 
-/** Forgets every workout's progress for this member (sign-out): nothing is left for the next person. */
+/**
+ * Forgets every workout's on-screen progress for this member (sign-out). This is only the screen
+ * ledger: unsent events live in the member's outbox database, which sign-out keeps or deletes
+ * as the member chooses (`SignOutButton`, `discardOutbox`).
+ */
 export function clearAllStoredProgress(userId: string) {
   const prefix = progressKeyPrefix(userId);
   for (const key of [...memory.keys()]) if (key.startsWith(prefix)) memory.delete(key);

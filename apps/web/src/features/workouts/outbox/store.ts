@@ -86,7 +86,14 @@ export class IndexedDbStore implements OutboxStore {
         const store = req.result.createObjectStore(STORE, { keyPath: "key" });
         store.createIndex("sessionId", "sessionId");
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        // let the database be deleted (sign-out discard) even from another tab
+        req.result.onversionchange = () => {
+          req.result.close();
+          this.db = null;
+        };
+        resolve(req.result);
+      };
       req.onerror = () => reject(req.error);
     });
     return this.db;

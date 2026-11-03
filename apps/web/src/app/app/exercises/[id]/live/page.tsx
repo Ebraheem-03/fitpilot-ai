@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { analyzerFor } from "@/features/live-coaching/analyzers";
-import { LiveCoach } from "@/features/live-coaching/LiveCoach";
+import { LiveSessionCoach } from "@/features/workouts/LiveSessionCoach";
 import { getExercise, getMe, getMyProfile, getWorkoutSession } from "@/lib/api";
 import { hasCurrentTrackingConsent } from "@/lib/api-types";
 
@@ -47,7 +47,7 @@ async function Live({
   }
   const me = sessionId !== undefined ? await getMe() : null;
   return (
-    <LiveCoach
+    <LiveSessionCoach
       sessionId={sessionId}
       userId={me?.id}
       trackingConsent={consent}
