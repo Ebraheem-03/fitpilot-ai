@@ -32,6 +32,7 @@ export const ISSUE_EXPLANATIONS: Record<PlanIssueCode, string> = {
   days_count: "The number of training days did not match what you asked for.",
   prescription: "An exercise was set up in reps when it is a timed hold, or the other way round.",
   session_length: "A day's workout would run longer than the time you have.",
+  medical_claim: "The draft used medical wording that a trainer needs to check.",
 };
 
 export const NEEDS_REVIEW_HEADLINE = "A trainer needs to check this plan before you can use it";
