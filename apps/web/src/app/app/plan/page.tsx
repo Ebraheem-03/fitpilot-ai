@@ -4,20 +4,31 @@ import { Suspense } from "react";
 import { GenerateButton } from "@/features/plans/GenerateButton";
 import { NeedsReviewNotice } from "@/features/plans/NeedsReviewNotice";
 import { PlanVersions } from "@/features/plans/PlanVersions";
+import { capitalise } from "@/features/plans/labels";
 import { PlanView } from "@/features/plans/PlanView";
+import { StartWorkoutButton } from "@/features/workouts/StartWorkoutButton";
+import { TodayWorkoutCard } from "@/features/workouts/TodayWorkoutCard";
 import { getCurrentPlan, listPlans } from "@/lib/api-plans";
-import { listExercises } from "@/lib/api";
+import { listExercises, listWorkoutSessions } from "@/lib/api";
 import { buildExerciseIndex } from "../_lib/exercise-index";
 
 export const metadata: Metadata = { title: "Your training plan · FitPilot AI" };
 
 async function PlanContent() {
   await connection();
-  const [current, versions, catalogue] = await Promise.all([
+  const [current, versions, catalogue, recent] = await Promise.all([
     getCurrentPlan(),
     listPlans(),
     listExercises(),
+    listWorkoutSessions(50),
   ]);
+  // A started, unfinished workout for a day of this plan is resumed rather than started again
+  // (newest first, so the latest one wins).
+  const resume: Record<number, string> = {};
+  for (const session of recent.items) {
+    if (session.status !== "started" || session.training_plan_id !== current?.id) continue;
+    if (session.plan_day_index !== null) resume[session.plan_day_index] ??= session.id;
+  }
   // A newer draft that failed the checks does not replace the current plan; say so.
   const review = versions[0]?.status === "needs_review" ? versions[0] : null;
 
@@ -32,7 +43,27 @@ async function PlanContent() {
               · version {current.version}
             </span>
           </h2>
-          <PlanView plan={current.plan} exercises={buildExerciseIndex(catalogue)} />
+          <TodayWorkoutCard
+            planId={current.id}
+            days={current.plan.days.map((d, index) => ({
+              index,
+              day: d.day_of_week,
+              focus: d.focus,
+            }))}
+            resume={resume}
+          />
+          <PlanView
+            plan={current.plan}
+            exercises={buildExerciseIndex(catalogue)}
+            dayAction={(day, index) => (
+              <StartWorkoutButton
+                planId={current.id}
+                dayIndex={index}
+                label={`Start ${capitalise(day.day_of_week)}'s workout`}
+                resumeSessionId={resume[index]}
+              />
+            )}
+          />
         </section>
       ) : (
         !review && (

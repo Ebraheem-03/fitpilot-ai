@@ -21,13 +21,18 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: [/live-coaching\.spec\.ts/, /live-cues\.spec\.ts/, /\.setup\.ts/],
+      testIgnore: [
+        /live-coaching\.spec\.ts/,
+        /live-cues\.spec\.ts/,
+        /workout-tracked\.spec\.ts/,
+        /\.setup\.ts/,
+      ],
     },
     // Builds the mannequin camera feed (ADR-0010 §8) once, before the live-coaching exit test.
     { name: "fake-camera", testMatch: /fake-camera\.setup\.ts/, use: devices["Desktop Chrome"] },
     {
       name: "live-coaching",
-      testMatch: /live-coaching\.spec\.ts/,
+      testMatch: [/live-coaching\.spec\.ts/, /workout-tracked\.spec\.ts/],
       dependencies: ["fake-camera"],
       use: {
         ...devices["Desktop Chrome"],

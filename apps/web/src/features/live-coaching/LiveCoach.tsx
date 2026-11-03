@@ -44,6 +44,12 @@ export interface LiveCoachProps {
   sink?: EventSink;
   /** Whether the member has already agreed to save tracking data (ADR-0011 §4). */
   trackingConsent?: boolean;
+  /** The member already chose not to save in this workout: don't ask again for every set. */
+  consentDeclined?: boolean;
+  /** The member answered the consent step (the workout runner keeps the answer for later sets). */
+  onConsentChange?: (granted: boolean) => void;
+  /** The runner owns set sequencing: no "Start again" after a set (one camera session = one set). */
+  singleSet?: boolean;
   /** reps prescribed for the set: shows set progress */
   targetReps?: number;
   /** index of the first set this camera session records (later sets count on from it) */
@@ -84,6 +90,9 @@ export function LiveCoach({
   sessionId,
   sink,
   trackingConsent = false,
+  consentDeclined = false,
+  onConsentChange,
+  singleSet = false,
   targetReps,
   setIndex = 0,
   onSetComplete,
@@ -105,7 +114,7 @@ export function LiveCoach({
   // Keyed by value: a new array identity for the same landmarks (router refresh, HMR) must not
   // dispose the engine and switch the camera off mid-session.
   const [consent, setConsent] = useState<"granted" | "declined" | "unknown">(
-    trackingConsent ? "granted" : "unknown",
+    trackingConsent ? "granted" : consentDeclined ? "declined" : "unknown",
   );
   const consentRef = useRef(consent);
   useEffect(() => {
@@ -269,7 +278,12 @@ export function LiveCoach({
             </li>
           </ul>
           {consentPending && (
-            <TrackingConsentStep onDecision={(save) => setConsent(save ? "granted" : "declined")} />
+            <TrackingConsentStep
+              onDecision={(save) => {
+                setConsent(save ? "granted" : "declined");
+                onConsentChange?.(save);
+              }}
+            />
           )}
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -327,11 +341,13 @@ export function LiveCoach({
                 : "Not saved: you chose to track only on this device."}
             </p>
           )}
-          <div>
-            <button type="button" className={primary} onClick={() => void engine?.start()}>
-              Start again
-            </button>
-          </div>
+          {!singleSet && (
+            <div>
+              <button type="button" className={primary} onClick={() => void engine?.start()}>
+                Start again
+              </button>
+            </div>
+          )}
         </div>
       )}
 

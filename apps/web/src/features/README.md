@@ -8,7 +8,8 @@ One folder per product area (blueprint §12). Each feature owns its components, 
 | exercise-viewer  | FR-03               | M1        |
 | exercise-library | FR-03               | M1        |
 | live-coaching    | FR-04, FR-05, FR-06 | M2–M3     |
-| workouts         | FR-02, FR-07        | M3        |
+| plans            | FR-02               | M3        |
+| workouts         | FR-07               | M3        |
 | nutrition        | FR-08               | M4        |
 | dashboard        | FR-10, FR-11        | M4–M5     |
 

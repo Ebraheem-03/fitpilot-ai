@@ -170,6 +170,42 @@ describe("LiveCoach (FR-04 UI)", () => {
     expect(screen.queryByTestId("tracking-consent")).toBeNull();
   });
 
+  it("tells the workout runner what the member chose, and doesn't ask again once they declined (S8)", async () => {
+    const onConsentChange = vi.fn();
+    const { unmount } = render(
+      <LiveCoach exercise={exercise} sessionId="s-1" onConsentChange={onConsentChange} />,
+    );
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: /Don't save — track only on this device/ }),
+      ),
+    );
+    expect(onConsentChange).toHaveBeenCalledWith(false);
+    unmount();
+
+    render(<LiveCoach exercise={exercise} sessionId="s-1" consentDeclined />);
+    expect(screen.queryByTestId("tracking-consent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start camera" })).toHaveProperty("disabled", false);
+  });
+
+  it("reports agreement to the runner too", async () => {
+    const onConsentChange = vi.fn();
+    render(<LiveCoach exercise={exercise} sessionId="s-1" onConsentChange={onConsentChange} />);
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Save my tracking data" })),
+    );
+    expect(onConsentChange).toHaveBeenCalledWith(true);
+  });
+
+  it("singleSet: no 'Start again' after the set, the runner decides what comes next (S8)", async () => {
+    render(<LiveCoach exercise={exercise} singleSet />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
+    await advance(4500);
+    fireEvent.click(screen.getByRole("button", { name: "Stop camera" }));
+    expect(screen.getByTestId("final-reps").textContent).toBe("1 rep counted.");
+    expect(screen.queryByRole("button", { name: "Start again" })).toBeNull();
+  });
+
   it("holds the outbox while the camera is on and releases it when the camera stops", async () => {
     render(<LiveCoach exercise={exercise} sessionId="s-1" trackingConsent />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start camera" })));
