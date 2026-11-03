@@ -28,6 +28,7 @@ from app.schemas.session import SessionEvent, SessionEventBatch, SessionSummary
 from app.schemas.workout_session import (
     CompleteSession,
     EventIngestResult,
+    ExerciseProgress,
     StartSession,
     WorkoutSessionBrief,
     WorkoutSessionOut,
@@ -164,7 +165,42 @@ def _replayed_start(session: WorkoutSession, data: StartSession) -> WorkoutSessi
 
 
 def get(db: Session, user: User, session_id: uuid.UUID) -> WorkoutSessionOut:
-    return WorkoutSessionOut.model_validate(_owned(db, user, session_id, "get"))
+    return to_out(db, _owned(db, user, session_id, "get"))
+
+
+def to_out(db: Session, session: WorkoutSession) -> WorkoutSessionOut:
+    """The session resource; a started session carries its `progress`."""
+    out = WorkoutSessionOut.model_validate(session)
+    if session.status is SessionStatus.started:
+        out = out.model_copy(update={"progress": _progress(db, session.id)})
+    return out
+
+
+def _progress(db: Session, session_id: uuid.UUID) -> dict[str, ExerciseProgress]:
+    """Per exercise: stored set indexes, skipped, highest set index seen (stored events only).
+    Lets the web runner resume after losing its local ledger."""
+    stored_sets: dict[str, set[int]] = {}
+    highest: dict[str, int] = {}
+    skipped: set[str] = set()
+    seen: set[str] = set()
+    for exercise_id, type_, set_index in repo.set_progress_rows(db, session_id):
+        seen.add(exercise_id)
+        if type_ == SessionEventType.exercise_skipped.value:
+            skipped.add(exercise_id)
+            continue
+        if set_index is None:
+            continue
+        highest[exercise_id] = max(highest.get(exercise_id, set_index), set_index)
+        if type_ != SessionEventType.rep_completed.value:
+            stored_sets.setdefault(exercise_id, set()).add(set_index)
+    return {
+        exercise_id: ExerciseProgress(
+            set_indexes=sorted(stored_sets.get(exercise_id, ())),
+            skipped=exercise_id in skipped,
+            highest_set_index=highest.get(exercise_id),
+        )
+        for exercise_id in sorted(seen)
+    }
 
 
 def list_own(db: Session, user: User, limit: int, offset: int) -> WorkoutSessionPage:

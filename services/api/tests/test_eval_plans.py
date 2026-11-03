@@ -172,16 +172,18 @@ def test_offline_run_scores_the_scripted_outcomes_exactly(offline: dict[str, Any
     assert (a["attempted"], a["scored"], a["errors"]) == (20, 20, {})
     v = a["validity"]
     assert v["feasible_plans"] == 18  # 20 minus p12 (either) and p20 (needs_review)
-    # p03 json_validate_failed→repaired, p06 drop_day→repaired, p07 add_dumbbells twice→escalated
-    assert v["valid_first_try"] == {"n": 15, "of": 18, "rate": round(15 / 18, 4)}
+    # p03 json_validate_failed→repaired, p05 medical_claim→repaired, p06 drop_day→repaired,
+    # p07 add_dumbbells twice→escalated
+    assert v["valid_first_try"] == {"n": 14, "of": 18, "rate": round(14 / 18, 4)}
     assert v["valid_after_repair"] == {"n": 17, "of": 18, "rate": round(17 / 18, 4)}
     assert v["schema_valid_first_try"]["n"] == 17  # only p03's first call didn't parse
     assert v["schema_valid_after_repair"]["n"] == 18
-    assert v["repaired"]["n"] == 2
+    assert v["repaired"]["n"] == 3
     assert v["first_issue_codes"] == {
         "days_count": 1,
         "equipment": 1,
         "generation_failed": 1,
+        "medical_claim": 1,  # p05, scripted "rehab" in the rationale
         "session_length": 1,  # p20, every time
     }
     e = a["escalation"]
@@ -191,14 +193,14 @@ def test_offline_run_scores_the_scripted_outcomes_exactly(offline: dict[str, Any
     # 17 feasible + p12 accepted; the generator never accepts a broken plan
     assert a["constraints"]["all"] == {"n": 18, "of": 18, "rate": 1.0}
     assert a["rate_limited_429"] == 1  # p10's scripted 429, recovered in-request
-    assert a["tokens"]["calls"] == 20 + 4  # p03, p06, p07, p20 each made a repair call
+    assert a["tokens"]["calls"] == 20 + 5  # p03, p05, p06, p07, p20 each made a repair call
     assert a["per_fixture"]["p07_strength_beginner_no_equipment"] == {
         "valid_first_try": 0,
         "repaired": 0,
         "escalated": 1,
         "error": 0,
     }
-    assert [f["fixture_id"][:3] for f in a["failures"]] == ["p07", "p03", "p06"]
+    assert [f["fixture_id"][:3] for f in a["failures"]] == ["p07", "p03", "p05"]
     assert a["failures"][0]["final_issues"] == [
         "equipment: monday: dumbbell_row needs dumbbells, which the member doesn't have"
     ]

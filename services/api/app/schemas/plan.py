@@ -50,6 +50,7 @@ PlanIssueCode = Literal[
     "days_count",
     "prescription",
     "session_length",
+    "medical_claim",
 ]
 # The codes the contract itself raises (as the pydantic error type).
 CONTRACT_ISSUE_CODES: frozenset[str] = frozenset(

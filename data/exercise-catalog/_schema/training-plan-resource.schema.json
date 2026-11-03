@@ -53,7 +53,8 @@
               "equipment",
               "days_count",
               "prescription",
-              "session_length"
+              "session_length",
+              "medical_claim"
             ]
           },
           "message": {
