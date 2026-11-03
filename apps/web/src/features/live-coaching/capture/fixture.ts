@@ -112,3 +112,38 @@ export function mannequinLabels(input: {
     annotated_by: "generated",
   };
 }
+
+/** What a person watching the video expects one cue rule to do on one rep. */
+export type CueJudgement = "expected" | "not_expected" | "not_judged";
+export const CUE_JUDGEMENTS: readonly CueJudgement[] = ["not_judged", "expected", "not_expected"];
+
+/**
+ * Per-rep human judgements → the contract's `cue_labels`. A rule judged on at least one rep is
+ * `by_eye`; a rule judged on none is written as `not_judged` (stray cues of it are still scored,
+ * but it never counts as evidence). Unsupported setups get no cue labels: every cue there is wrong
+ * by definition, and the contract rejects them.
+ *
+ * `judgements[i]` belongs to rep `i`; a rule missing from it is not judged on that rep.
+ */
+export function buildCueLabels(input: {
+  ruleIds: readonly string[];
+  supported: boolean;
+  judgements: readonly Readonly<Record<string, CueJudgement>>[];
+}): ClipLabels["cue_labels"] {
+  if (!input.supported || input.ruleIds.length === 0) return undefined;
+  return {
+    rules: input.ruleIds.map((rule_id) => {
+      const reps = (j: CueJudgement) =>
+        input.judgements.flatMap((rep, i) => (rep[rule_id] === j ? [i] : []));
+      const expected_reps = reps("expected");
+      const not_expected_reps = reps("not_expected");
+      const judged = expected_reps.length + not_expected_reps.length > 0;
+      return {
+        rule_id,
+        method: judged ? "by_eye" : "not_judged",
+        expected_reps,
+        not_expected_reps,
+      };
+    }),
+  };
+}

@@ -268,7 +268,8 @@
             "low_light",
             "unsupported_view",
             "no_person",
-            "slow_device"
+            "slow_device",
+            "camera_stalled"
           ]
         },
         "duration_ms": {

@@ -52,7 +52,8 @@ export const DEGRADED_LABELS: Record<TrackingDegradedReason, string> = {
   low_visibility: "Hip, knee or ankle not clearly visible",
   low_light: "Too dark to track",
   unsupported_view: "Not side-on to the camera",
-  slow_device: "Device too slow, or the picture stopped updating",
+  slow_device: "Device too slow to track",
+  camera_stalled: "Camera picture stopped updating",
 };
 
 export function formatDuration(ms: number): string {

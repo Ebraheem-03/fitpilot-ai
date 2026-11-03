@@ -5,6 +5,7 @@ import {
   SessionEvent,
   SessionEventBatch,
   SessionSummary,
+  TRACKING_DEGRADED_REASONS,
 } from "../src";
 
 const SESSION = "0b3f6a52-6a0b-4f43-8d4e-5f4a5f6a7b8c";
@@ -80,6 +81,14 @@ describe("SessionEvent", () => {
         false,
       );
     }
+  });
+
+  it("accepts every tracking reason, including a stalled camera, and nothing else", () => {
+    for (const reason of TRACKING_DEGRADED_REASONS) {
+      expect(messages({ ...valid.tracking_degraded, reason })).toEqual([]);
+    }
+    expect(TRACKING_DEGRADED_REASONS).toContain("camera_stalled");
+    expect(messages({ ...valid.tracking_degraded, reason: "no_frames" })).not.toEqual([]);
   });
 
   it("rejects ids that are not slugs", () => {

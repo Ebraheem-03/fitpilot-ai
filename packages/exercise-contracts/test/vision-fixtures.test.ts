@@ -107,6 +107,34 @@ describe("ClipLabels cue annotations (M3 S2)", () => {
   it("reject an unknown annotation method", () =>
     expect(ClipLabels.safeParse(withCues([rule({ method: "guessed" })])).success).toBe(false));
 
+  it("accept a not_judged rule with empty lists (stray cues of it are still scored)", () =>
+    expect(
+      ClipLabels.safeParse(
+        withCues([rule({ method: "not_judged", expected_reps: [], not_expected_reps: [] })]),
+      ).success,
+    ).toBe(true));
+
+  it("reject a not_judged rule that lists reps (it would be a judgement)", () => {
+    const listed = [
+      { expected_reps: [0], not_expected_reps: [] },
+      { expected_reps: [], not_expected_reps: [0] },
+    ];
+    for (const lists of listed) {
+      expect(
+        ClipLabels.safeParse(withCues([rule({ method: "not_judged", ...lists })])).success,
+      ).toBe(false);
+    }
+  });
+
+  it.each(["by_eye", "from_rep_labels", "synthetic_ground_truth"])(
+    "reject %s with no reps listed: nothing was judged, so it must say not_judged",
+    (method) =>
+      expect(
+        ClipLabels.safeParse(withCues([rule({ method, expected_reps: [], not_expected_reps: [] })]))
+          .success,
+      ).toBe(false),
+  );
+
   it("reject cue annotations on an unsupported setup (no cue may appear there at all)", () =>
     expect(ClipLabels.safeParse({ ...withCues([rule()]), supported: false }).success).toBe(false));
 });
