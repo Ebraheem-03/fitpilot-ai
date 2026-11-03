@@ -46,6 +46,8 @@ export interface RunnerExercise {
 }
 
 export interface WorkoutRunnerProps {
+  /** the signed-in member: each member has their own on-device outbox */
+  userId: string;
   sessionId: string;
   exercises: RunnerExercise[];
   /** the member already agreed to save tracking data (ADR-0011 §4) */
@@ -58,12 +60,12 @@ const secondary = "rounded-md border border-border px-4 py-2 font-medium hover:b
 const card = "flex flex-col gap-4 rounded-xl border border-border p-5";
 
 /** Items waiting on this device to be sent (ADR-0011 §2). Polled: the outbox flushes on its own. */
-function usePendingCount(sessionId: string): number {
+function usePendingCount(userId: string, sessionId: string): number {
   const [pending, setPending] = useState(0);
   useEffect(() => {
     let live = true;
     const read = () =>
-      getOutbox()
+      getOutbox(userId)
         .pendingCount(sessionId)
         .then((n) => live && setPending(n))
         .catch(() => undefined);
@@ -73,7 +75,7 @@ function usePendingCount(sessionId: string): number {
       live = false;
       clearInterval(id);
     };
-  }, [sessionId]);
+  }, [userId, sessionId]);
   return pending;
 }
 
@@ -84,7 +86,12 @@ function usePendingCount(sessionId: string): number {
  * can rate each set and the workout, then complete it. Everything is recorded as `SessionEvent`s
  * in the on-device outbox, which sends them in the background and before completing.
  */
-export function WorkoutRunner({ sessionId, exercises, trackingConsent }: WorkoutRunnerProps) {
+export function WorkoutRunner({
+  userId,
+  sessionId,
+  exercises,
+  trackingConsent,
+}: WorkoutRunnerProps) {
   const router = useRouter();
   const [progress, updateProgress] = useStoredProgress(sessionId);
   const [consent, setConsent] = useState<Consent>(trackingConsent ? "granted" : "unknown");
@@ -96,7 +103,7 @@ export function WorkoutRunner({ sessionId, exercises, trackingConsent }: Workout
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [skipReason, setSkipReason] = useState<SkipReason | "">("");
-  const pending = usePendingCount(sessionId);
+  const pending = usePendingCount(userId, sessionId);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const planned = exercises.map((e) => e.planned);
 
@@ -126,8 +133,8 @@ export function WorkoutRunner({ sessionId, exercises, trackingConsent }: Workout
     set: SetRecord | null,
     afterSet: Step | null,
   ) {
-    if (events.length) await getOutbox().enqueue(events);
-    void getOutbox().flush(sessionId); // sets are sent as they end; failures retry on their own
+    if (events.length) await getOutbox(userId).enqueue(events);
+    void getOutbox(userId).flush(sessionId); // sets are sent as they end; failures retry on their own
     updateProgress((p) => (set ? recordSet(p, exercise.id, set) : skipExercise(p, exercise.id)));
     setChosen(null);
     setCounted(null);
@@ -216,7 +223,7 @@ export function WorkoutRunner({ sessionId, exercises, trackingConsent }: Workout
     setBusy(true);
     setError(null);
     try {
-      const outbox = getOutbox();
+      const outbox = getOutbox(userId);
       await outbox.flush(sessionId).catch(() => undefined);
       // Events sent after completion are rejected, so completing now would lose what is waiting.
       if ((await outbox.pendingCount(sessionId)) > 0) {
@@ -347,6 +354,7 @@ export function WorkoutRunner({ sessionId, exercises, trackingConsent }: Workout
               counted={counted?.key === stepKey ? counted.summary : null}
               busy={busy}
               error={error}
+              userId={userId}
               sessionId={sessionId}
               onMode={(mode) => setChosen({ key: stepKey, mode })}
               onConsent={(granted) => setConsent(granted ? "granted" : "declined")}
@@ -473,6 +481,7 @@ function SetEntry({
   counted,
   busy,
   error,
+  userId,
   sessionId,
   onMode,
   onConsent,
@@ -488,6 +497,7 @@ function SetEntry({
   counted: SetSummary | null;
   busy: boolean;
   error: string | null;
+  userId: string;
   sessionId: string;
   onMode: (mode: "camera" | "manual") => void;
   onConsent: (granted: boolean) => void;
@@ -532,6 +542,7 @@ function SetEntry({
           name: exercise.name,
           required_landmarks: exercise.required_landmarks,
         }}
+        userId={userId}
         sessionId={sessionId}
         setIndex={setIndex}
         targetReps={planned.reps ?? undefined}

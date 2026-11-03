@@ -57,3 +57,17 @@ export async function onboard(page: Page, opts: { days?: string; minutes?: strin
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page).toHaveURL(/\/app\/profile$/);
 }
+
+/**
+ * Through the real UI: onboard, generate a plan (fake planner), start Monday's workout. Returns
+ * the session id. Monday is used because it is deterministic whatever day the test runs on.
+ */
+export async function startWorkout(page: Page): Promise<string> {
+  await onboard(page);
+  await page.goto("/app/plan");
+  await page.getByRole("button", { name: "Generate my plan" }).click();
+  await expect(page.getByTestId("plan-version-label")).toHaveText("· version 1");
+  await page.getByRole("button", { name: "Start Monday's workout", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/workouts\/[0-9a-f-]{36}$/);
+  return page.url().split("/").pop()!;
+}

@@ -7,9 +7,9 @@ import { Suspense } from "react";
 import { capitalise } from "@/features/plans/labels";
 import { canTrackLive } from "@/features/exercise-library/ExerciseGuide";
 import { type RunnerExercise, WorkoutRunner } from "@/features/workouts/WorkoutRunner";
-import { getMyProfile, getWorkoutSession, listExercises } from "@/lib/api";
+import { getMe, getMyProfile, getWorkoutSession, listExercises } from "@/lib/api";
+import { hasCurrentTrackingConsent } from "@/lib/api-types";
 import { getPlan } from "@/lib/api-plans";
-import { hasTrackingConsent } from "../../_lib/consent";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -37,7 +37,8 @@ async function Workout({ params }: Pick<PageProps<"/app/workouts/[sessionId]">, 
   if (session.training_plan_id === null || session.plan_day_index === null) {
     return <Notice>This workout isn&apos;t linked to a training plan day.</Notice>;
   }
-  const [plan, catalogue, profile] = await Promise.all([
+  const [me, plan, catalogue, profile] = await Promise.all([
+    getMe(),
     getPlan(session.training_plan_id),
     listExercises(),
     getMyProfile(),
@@ -69,9 +70,10 @@ async function Workout({ params }: Pick<PageProps<"/app/workouts/[sessionId]">, 
         </p>
       </div>
       <WorkoutRunner
+        userId={me.id}
         sessionId={sessionId}
         exercises={exercises}
-        trackingConsent={hasTrackingConsent(profile)}
+        trackingConsent={hasCurrentTrackingConsent(profile)}
       />
     </>
   );

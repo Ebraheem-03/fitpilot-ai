@@ -9,10 +9,7 @@ const generate = (page: Page) =>
 const planView = (page: Page) => page.getByTestId("plan-view").filter({ visible: true });
 
 async function openPlan(page: Page) {
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Plan" })
-    .click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Plan" }).click();
   await expect(page).toHaveURL(/\/app\/plan$/);
 }
 

@@ -1,11 +1,12 @@
 // FR-07 / ADR-0011: session events wait in an on-device outbox and reach the API exactly once,
-// whatever the network does. The dev harness (/dev/outbox) drives the real outbox and server
-// actions without a camera; the camera-while-recording rules are covered in live-coaching.spec.ts.
+// whatever the network does. Everything here goes through the real UI: a plan, a started workout,
+// the workout runner and the live page. The camera-while-recording rules are also covered in
+// live-coaching.spec.ts.
 import { expect, test, type Page, type Request } from "@playwright/test";
-import { completeOnboarding, signUp } from "./helpers";
+import { signUp, startWorkout } from "./helpers";
 
-const HARNESS = "/dev/outbox";
-const pending = (page: Page) => page.getByTestId("harness-pending");
+const runner = (page: Page) => page.getByTestId("workout-runner").filter({ visible: true });
+const pending = (page: Page) => page.getByTestId("save-status").filter({ visible: true });
 
 // Server actions are POSTs to the page URL; event uploads are the ones carrying idempotency keys.
 const isEventUpload = (r: Request) =>
@@ -23,62 +24,77 @@ function trackUploads(page: Page): string[] {
   return answered;
 }
 
-async function startHarnessSession(page: Page): Promise<string> {
-  await page.goto(HARNESS);
-  await page.getByRole("button", { name: "Start session" }).click();
-  await expect(page).toHaveURL(/\/dev\/outbox\?session=[0-9a-f-]{36}$/);
-  return new URL(page.url()).searchParams.get("session")!;
+/** The first exercise of Monday is the squat: log its first set by hand, with the plan's target. */
+async function logFirstSetByHand(page: Page): Promise<string> {
+  const r = runner(page);
+  await r.getByRole("button", { name: "Log this set by hand instead" }).click();
+  const reps = await r.getByLabel("Reps completed").inputValue();
+  await r.getByRole("button", { name: "Save set", exact: true }).click();
+  return reps;
 }
 
 test("a set finished with no network is sent once after the page is reloaded and the network is back", async ({
   page,
 }) => {
+  test.setTimeout(90_000); // plan generation + onboarding come first, and CI is slow
   await signUp(page);
-  await startHarnessSession(page);
-
+  await startWorkout(page);
   const finished = trackUploads(page);
 
   // The network drops: event uploads fail at the transport, like a dead connection.
   await page.route("**/*", (route) =>
     isEventUpload(route.request()) ? route.abort("internetdisconnected") : route.continue(),
   );
-  await page.getByRole("button", { name: "Log a 10-rep set by hand" }).click();
-  await expect(pending(page)).toHaveText("1 queued");
-  await page.getByRole("button", { name: "Send now" }).click();
-  await expect(page.getByTestId("harness-message")).toHaveText("retry_scheduled");
-  await expect(pending(page)).toHaveText("1 queued");
+  const reps = await logFirstSetByHand(page);
+  await expect(pending(page)).toHaveAttribute("data-pending", "1", { timeout: 10_000 });
   expect(finished).toEqual([]);
 
   // Back online, then the member reloads: the app load flushes what the last visit left behind.
   await page.unroute("**/*");
   await page.reload();
   await expect.poll(() => finished.length).toBe(1);
+  await expect(pending(page)).toHaveAttribute("data-pending", "0");
 
-  await page.getByRole("button", { name: "Complete workout" }).click();
-  await expect(page.getByTestId("harness-summary")).toHaveText("1 sets, 10 reps");
-  expect(finished).toHaveLength(1); // stored once, not re-sent by the retry timer or reload
-  await expect(pending(page)).toHaveText("0 queued");
+  await runner(page).getByRole("button", { name: "Finish workout" }).click();
+  await runner(page).getByRole("button", { name: "Complete workout" }).click();
+  await expect(page).toHaveURL(/\/summary$/);
+  const squat = page.locator(
+    '[data-testid="summary-exercise"][data-exercise-id="bodyweight_squat"]',
+  );
+  await expect(squat.getByTestId("summary-set")).toHaveCount(1);
+  await expect(squat.getByTestId("summary-set")).toContainText(`${reps} reps`);
+  expect(finished).toHaveLength(1); // stored once, not re-sent by the retry timer or the reload
 });
 
-test("going offline mid-workout, then reconnecting, saves the set once", async ({
+test("going offline mid-workout, then reconnecting, saves the set once; completing waits for it", async ({
   page,
   context,
 }) => {
+  test.setTimeout(90_000); // plan generation + onboarding come first, and CI is slow
   await signUp(page);
-  await startHarnessSession(page);
+  await startWorkout(page);
   const finished = trackUploads(page);
 
   await context.setOffline(true);
-  await page.getByRole("button", { name: "Log a 10-rep set by hand" }).click();
-  await page.getByRole("button", { name: "Send now" }).click();
-  await expect(page.getByTestId("harness-message")).toHaveText("retry_scheduled");
-  await expect(pending(page)).toHaveText("1 queued");
+  const reps = await logFirstSetByHand(page);
+  await expect(pending(page)).toHaveAttribute("data-pending", "1", { timeout: 10_000 });
   expect(finished).toEqual([]);
+
+  // Completing now would drop the unsent set (events after completion are refused): it waits.
+  await runner(page).getByRole("button", { name: "Finish workout" }).click();
+  await runner(page).getByRole("button", { name: "Complete workout" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "haven't been sent yet" })).toBeVisible();
+  await expect(page).not.toHaveURL(/\/summary$/);
 
   await context.setOffline(false); // the browser's `online` event triggers the flush
   await expect.poll(() => finished.length, { timeout: 15_000 }).toBe(1);
-  await page.getByRole("button", { name: "Complete workout" }).click();
-  await expect(page.getByTestId("harness-summary")).toHaveText("1 sets, 10 reps");
+  await expect(pending(page)).toHaveAttribute("data-pending", "0");
+  await runner(page).getByRole("button", { name: "Complete workout" }).click();
+  await expect(page).toHaveURL(/\/summary$/);
+  const squat = page.locator(
+    '[data-testid="summary-exercise"][data-exercise-id="bodyweight_squat"]',
+  );
+  await expect(squat.getByTestId("summary-set")).toContainText(`${reps} reps`);
   expect(finished).toHaveLength(1);
 });
 
@@ -86,10 +102,10 @@ test("consent: asked once before the first saved set, shown on the profile, and 
   page,
 }) => {
   await signUp(page);
-  await completeOnboarding(page);
+  const id = await startWorkout(page);
+  await page.goto("/app/profile");
   await expect(page.getByTestId("tracking-consent-setting")).toContainText("Off.");
 
-  const id = await startHarnessSession(page);
   await page.goto(`/app/exercises/bodyweight_squat/live?session=${id}`);
   const step = page.getByTestId("tracking-consent");
   await expect(step).toContainText(
@@ -118,8 +134,7 @@ test("a tracked set with a session sends nothing while the camera runs, then sav
 }) => {
   test.setTimeout(120_000);
   await signUp(page);
-  await completeOnboarding(page);
-  const id = await startHarnessSession(page);
+  const id = await startWorkout(page);
   await page.goto(`/app/exercises/bodyweight_squat/live?session=${id}`);
   await page.getByRole("button", { name: "Save my tracking data" }).click();
   await expect(page.getByTestId("tracking-consent")).toBeHidden();
@@ -161,8 +176,7 @@ test("stop then Start again at once: the camera waits for the slow upload, so no
 }) => {
   test.setTimeout(120_000);
   await signUp(page);
-  await completeOnboarding(page);
-  const id = await startHarnessSession(page);
+  const id = await startWorkout(page);
   await page.goto(`/app/exercises/bodyweight_squat/live?session=${id}`);
   await page.getByRole("button", { name: "Save my tracking data" }).click();
   await expect(page.getByTestId("tracking-consent")).toBeHidden();
@@ -172,6 +186,12 @@ test("stop then Start again at once: the camera waits for the slow upload, so no
     if (!isEventUpload(route.request())) return route.continue();
     await new Promise((resolve) => setTimeout(resolve, 2000));
     await route.continue();
+  });
+  // M2-EXIT style: ANY non-GET request (any type, any origin) is recorded with its time, so the
+  // second camera window can be checked for silence, not just event uploads.
+  const nonGet: { at: number; what: string }[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "GET") nonGet.push({ at: Date.now(), what: `${r.method()} ${r.url()}` });
   });
   const uploads: { startedAt: number; answeredAt: number | null }[] = [];
   page.on("request", (r) => {
@@ -205,7 +225,11 @@ test("stop then Start again at once: the camera waits for the slow upload, so no
   expect(uploads[0]!.startedAt).toBeLessThan(restartAt);
   expect(uploads[0]!.answeredAt).not.toBeNull();
   expect(uploads[0]!.answeredAt!).toBeLessThanOrEqual(restartAt); // answered before the camera came back
+  const secondWindowEnd = Date.now();
   await page.getByRole("button", { name: "Stop camera" }).click();
+  // The second camera window ran from the restart to this stop: nothing but GETs in it.
+  const during = nonGet.filter((r) => r.at >= restartAt && r.at <= secondWindowEnd);
+  expect(during, JSON.stringify(during)).toEqual([]);
   await expect.poll(() => uploads.length).toBe(2);
 });
 
@@ -213,8 +237,7 @@ test("declining keeps tracking available without saving, and practice mode never
   page,
 }) => {
   await signUp(page);
-  await completeOnboarding(page);
-  const id = await startHarnessSession(page);
+  const id = await startWorkout(page);
 
   await page.goto("/app/exercises/bodyweight_squat/live");
   await expect(page.getByTestId("tracking-consent")).toHaveCount(0); // practice mode
@@ -231,7 +254,7 @@ test("someone else's session id is a 404 on the live page, not practice mode", a
   browser,
 }) => {
   await signUp(page);
-  const id = await startHarnessSession(page);
+  const id = await startWorkout(page);
 
   const other = await browser.newContext();
   const otherPage = await other.newPage();

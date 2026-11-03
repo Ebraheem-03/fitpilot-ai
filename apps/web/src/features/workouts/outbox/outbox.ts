@@ -29,7 +29,7 @@ export interface OutboxOptions {
   pruneQuarantinedAfterMs?: number;
 }
 
-export type FlushOutcome = "empty" | "sent" | "held" | "retry_scheduled";
+export type FlushOutcome = "empty" | "sent" | "held" | "retry_scheduled" | "disposed";
 
 const encoder = new TextEncoder();
 export const byteLength = (value: unknown) => encoder.encode(JSON.stringify(value)).length;
@@ -71,6 +71,7 @@ export class Outbox {
   private chain: Promise<unknown> = Promise.resolve();
   private failures = 0;
   private cancelRetry: (() => void) | null = null;
+  private disposed = false;
 
   constructor(options: OutboxOptions) {
     this.o = {
@@ -128,8 +129,13 @@ export class Outbox {
     await this.chain;
   }
 
-  /** Stops the retry timer (the member signed out or changed). */
+  /**
+   * The member signed out or changed: stop the retry timer, and never start another batch. A send
+   * already on the wire can't be recalled, but a flush that was running ends after it, so nothing
+   * more leaves under a token that may no longer be this member's.
+   */
   dispose(): void {
+    this.disposed = true;
     this.cancelRetry?.();
     this.cancelRetry = null;
   }
@@ -154,12 +160,14 @@ export class Outbox {
   }
 
   private async doFlush(sessionId?: string): Promise<FlushOutcome> {
+    if (this.disposed) return "disposed";
     if (this.held) return "held";
     const all = await this.o.store.pending(sessionId);
     if (!all.length) return "empty";
     const sessions = [...new Set(all.map((r) => r.sessionId))];
     for (const id of sessions) {
       for (;;) {
+        if (this.disposed) return "disposed";
         if (this.held) return "held";
         const [chunk] = chunkByBytes(
           await this.o.store.pending(id),
@@ -250,7 +258,7 @@ export class Outbox {
   }
 
   private scheduleRetry(): void {
-    if (this.cancelRetry) return;
+    if (this.disposed || this.cancelRetry) return;
     const delay = Math.min(this.o.backoffMaxMs, this.o.backoffBaseMs * 2 ** this.failures);
     this.failures++;
     this.cancelRetry = this.o.schedule(() => {

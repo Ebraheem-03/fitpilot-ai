@@ -4,23 +4,15 @@
 // camera-tracked exercise is logged by hand, which is a supported path in its own right.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { onboard, signUp } from "./helpers";
+import { signUp, startWorkout } from "./helpers";
 
-const generate = (page: Page) =>
-  page.getByRole("button", { name: /Generate my plan|Regenerate plan/ }).filter({ visible: true });
 const runner = (page: Page) => page.getByTestId("workout-runner").filter({ visible: true });
 
 async function planAndStart(page: Page) {
   await signUp(page);
-  await onboard(page);
-  await page.goto("/app/plan");
-  await generate(page).click();
-  await expect(page.getByTestId("plan-version-label")).toHaveText("· version 1");
-  // Deterministic regardless of the weekday the test runs on: the per-day button.
-  await page.getByRole("button", { name: "Start Monday's workout", exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/workouts\/[0-9a-f-]{36}$/);
+  const id = await startWorkout(page);
   await expect(runner(page)).toBeVisible();
-  return page.url().split("/").pop()!;
+  return id;
 }
 
 /** Log one set by hand with the form's defaults (the plan's target), optionally rated. */

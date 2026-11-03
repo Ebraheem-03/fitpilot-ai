@@ -12,11 +12,17 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const outbox = {
-  enqueue: vi.fn(async (_events: unknown[]) => {}),
+  enqueue: vi.fn(async (...events: unknown[][]) => void events),
   flush: vi.fn(async () => "sent" as string),
   pendingCount: vi.fn(async () => 0),
 };
-vi.mock("./outbox/browser", () => ({ getOutbox: () => outbox }));
+const outboxUsers = new Set<string>();
+vi.mock("./outbox/browser", () => ({
+  getOutbox: (userId: string) => {
+    outboxUsers.add(userId);
+    return outbox;
+  },
+}));
 
 const completeSession = vi.fn();
 vi.mock("./actions", () => ({
@@ -25,6 +31,7 @@ vi.mock("./actions", () => ({
 
 // The camera and the pose model are not under test here, only how the runner uses LiveCoach.
 interface StubProps {
+  userId?: string;
   sessionId?: string;
   setIndex?: number;
   targetReps?: number;
@@ -51,6 +58,7 @@ vi.mock("../live-coaching/LiveCoach", () => ({
       <div
         data-testid="live-coach-stub"
         data-session-id={props.sessionId}
+        data-user-id={props.userId}
         data-set-index={props.setIndex}
         data-target-reps={props.targetReps}
         data-single-set={String(props.singleSet)}
@@ -133,13 +141,19 @@ const runner = () => screen.getByTestId("workout-runner");
 
 function renderRunner(exercises = [plank, bridge], consent = false) {
   return render(
-    <WorkoutRunner sessionId={SESSION} exercises={exercises} trackingConsent={consent} />,
+    <WorkoutRunner
+      userId="user-1"
+      sessionId={SESSION}
+      exercises={exercises}
+      trackingConsent={consent}
+    />,
   );
 }
 
 beforeEach(() => {
   storage.clear();
   liveProps.length = 0;
+  outboxUsers.clear();
   push.mockReset();
   completeSession.mockReset();
   outbox.enqueue.mockClear();
@@ -326,10 +340,19 @@ describe("WorkoutRunner: camera-tracked sets", () => {
     renderRunner([squat], true);
     const stub = await screen.findByTestId("live-coach-stub");
     expect(stub.getAttribute("data-session-id")).toBe(SESSION);
+    expect(stub.getAttribute("data-user-id")).toBe("user-1");
     expect(stub.getAttribute("data-set-index")).toBe("0");
     expect(stub.getAttribute("data-target-reps")).toBe("10");
     expect(stub.getAttribute("data-single-set")).toBe("true");
     expect(liveProps.at(-1)).toMatchObject({ trackingConsent: true, consentDeclined: false });
+  });
+
+  it("only ever uses this member's outbox", async () => {
+    renderRunner([bridge]);
+    await screen.findByTestId("current-step");
+    await user.click(screen.getByRole("button", { name: "Save set" }));
+    await screen.findByTestId("finish-panel");
+    expect([...outboxUsers]).toEqual(["user-1"]);
   });
 
   it("saves a counted set without a new event when the member adds no rating", async () => {
