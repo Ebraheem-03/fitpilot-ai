@@ -3,8 +3,8 @@
 Supabase grants `anon` and `authenticated` ALL on every new sequence in `public`. 0002 and the
 table migrations revoked the table grants but not the identity sequence behind
 `session_events.seq`, so a publishable-key holder could read and advance it (nextval/setval) over
-the Data API. This revokes on every sequence in `public`, so sequences added later are covered
-when they are migrated (tests/db/test_sequence_grants.py fails if one is missed).
+the Data API. This revokes on every sequence that exists in `public` when it runs; 0007 removes the
+default grant so sequences created later start without one.
 
 The roles only exist on Supabase; on plain Postgres this is a no-op.
 
