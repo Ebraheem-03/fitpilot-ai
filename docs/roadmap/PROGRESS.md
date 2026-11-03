@@ -1,7 +1,7 @@
 # Progress
 
-Current milestone: **M3 — Integrated AI coaching** (planned 2026-10-28; M2 done, phone benchmark still open).
-Next up: M3 **S0 LLM provider spike** (Groq key is in the root `.env`; `Settings` loads it). M2 open item for you: `make bench-phone` on a mid-range phone (ADR-0010).
+Current milestone: **M3 — Integrated AI coaching ✅ done 2026-11-03.** M4 next.
+Next up: `/kickoff-milestone M4`. Your actions: enable **Zero Data Retention** in the Groq console (ADR-0006 §1), `make bench-phone` on a mid-range phone (ADR-0010), and record shallow and forward-lean squats so the cue thresholds can be calibrated (`data/evaluation-fixtures/README.md`).
 
 > Claude: read this file at the start of a session (the SessionStart hook prints the top of it).
 > Update it with `/handoff` at the end of a session. Keep it short — history lives in git.
@@ -26,106 +26,28 @@ Monorepo + CI, exercise contract with parity, DB + RLS, JWKS auth, profiles API,
 Evidence: `make verify` green (web 94, avatar 83, contracts 11, rules 8, API 79); `make e2e` 23/23. Page entry JS 13 KiB gz without three.js; lazy 3D 257 KiB gz; GLB 490 KiB (120 KiB gz).
 Deferred from M1: curl + push-up clips → M4 (add a `MotionDefinition` per `assets/README.md`) · syncing with a selected workout → M3 · viewer error telemetry → M2 with vision events · GLB `Content-Encoding` on Vercel → M5.
 
-### M2 — Live vision engine (wk 5–6) ✅ done 2026-10-28
+### M2 — Live vision engine ✅ done 2026-10-28
 
-**Exit (verbatim, §11):** "a member can perform a supported squat while the application tracks and counts repetitions, with explicit handling of unreliable tracking."
-**Proven by (planned, per ADR-0010):** (1) `apps/web/tests/e2e/live-coaching.spec.ts` EXIT: the real model in the real worker, fed by Chrome's fake camera playing a generated video of the M1 mannequin squatting (no real person; known rep count). The displayed rep count must equal it; blank segments must show "tracking not reliable" and freeze the count; stop must release the camera. (2) Real model with Chrome's default fake camera (no person) → "no person detected", 0 reps. (3) Vision regression over ≥10 real annotated clips meets the provisional gate: rep precision ≥ 0.95, recall ≥ 0.90, 0 reps counted inside `untrackable_ranges_ms`.
+**Exit:** "a member can perform a supported squat while the application tracks and counts repetitions, with explicit handling of unreliable tracking." **Proven by** `live-coaching.spec.ts` EXIT (real model in the worker, mannequin fake camera: 5/5 reps, count frozen while hidden, no outbound requests) + `live-coaching-states.spec.ts`. Worker + lite model + self-hosted runtime (ADR-0010); squat ruleset v3 calibrated on 25 Pexels clips (counting P 1.00 / R 1.00, refusal 12/14); live page with guidance, confidence and failure states; security + code reviews fixed (#34–#42). Open: phone benchmark (you).
 
-Already in the repo: `packages/exercise-rules` v1 (`assessTracking`, `jointAngle`, `Ema`, `SquatAnalyzer`, left side only, thresholds uncalibrated; 8 synthetic tests) · `MEDIAPIPE_POSE_INDEX` + `SessionEvent` contracts (incl. `TrackingDegradedEvent`) · `@mediapipe/tasks-vision` dependency · Playwright fake-camera flags · fixture format in `data/evaluation-fixtures/README.md` (no fixtures yet) · ADR-0002 (worker, `PoseSource`). Not there yet: anything in `features/live-coaching`, a worker, CSP/`Permissions-Policy` headers.
+### M3 — Integrated AI coaching ✅ done 2026-11-03
 
-- [x] **S0 spike → ADR-0010** — worker + classic WASM (Turbopack emits classic workers), self-hosted runtime + sha-pinned models (`scripts/vendor-mediapipe.mjs`), lite model, `auto` delegate (CPU on software GL: GPU there ran at ≤10 fps and starved the page), warm-up in init (cold first inference up to 7.6 s), `ImageBitmap` transport. M1 Pro: worker lite 55–59 fps, page stays at 120 rAF/s; main-thread inference drops it to 61–110. WebKit + prod build OK. Numbers in `benchmarks.md`. **Phone run pending (you)**.
-- [x] **S1 fixture contract + vision regression runner** (#36) — `LandmarkFixture`/`ClipLabels`/`VisionGate` (TS-only), `evaluateClip`/`aggregate`, loader fails loudly (malformed, unpaired, stray files), gate per exercise folder runs in `pnpm test`; gate scores only the runtime model's fixtures and can't pass vacuously.
-- [x] **S2 local capture + annotation tool** (#37) — `/dev/capture` (dev-only): local video or synthetic mannequin → runtime worker at a fixed timestep → `landmarks.json`; rep/untrackable annotation → `labels.json`; no uploads (tested). First fixtures: `mannequin_side_{lite,full}` (6 loops, 1 hidden). Lite + analyzer v1: 5/5 reps, 0 counted while hidden. **Full model: 0/5**, because its left-leg estimate collapses (5–40°) when the legs overlap side-on → S4 needs a plausibility check + side fallback.
-- [x] **S3 annotated real clips**: from **Pexels stock footage instead of owner recordings** (owner decision, 2026-10-28). 25 clips: 11 side-view and 13 unsupported (front, three-quarter, body cut off). Landmarks were extracted with both models, and reps were labelled by eye from frame sheets. Videos aren't in git; credits are in `data/evaluation-fixtures/README.md`.
-- [x] **S4 analyzer calibrated: ruleset v3** (catalogue `ruleset_version: 3`).
-  - **Results (lite model):** counting on supported clips **48/48 reps, 0 false** (precision 1.00, recall 1.00). Refusal on unsupported clips 12/14 count nothing; the 2 leaks are a rear three-quarter view and a panning three-quarter view.
-  - **What calibration found and fixed:**
-    - **Aspect-ratio bug.** Normalised x/y measured stretched angles on portrait (phone) video, taking recall from 0.83 to 0.94.
-    - **Depth-to-count and feet-planted rules.** A bend-and-step pickup and a Smith-machine shot were counting as reps.
-    - **Out-of-frame rule.** Feet cut off by the frame were still counted.
-    - **Yaw view check.**
-  - **Gate split** (owner decision): counting is precision ≥ 0.95 / recall ≥ 0.90 on supported clips; refusal is ≥ 80% of unsupported clips counting nothing; at least 10 real recordings. The full model scores precision 0.87 / recall 0.94, which confirms lite as the runtime default.
-- [x] **S5 live engine** — `features/live-coaching/engine`: session machine (explicit start, permission, warm-up, pause/stop, named failures, one worker restart), `TrackingMonitor` (searching/tracking/unreliable + why: no person, out of frame, low visibility, low light, slow device; settle time; fps window, analysis withheld < 8 fps), `LiveEngine` with injected browser deps (`requestVideoFrameCallback`, `ImageBitmap`, luma sampling), `FixtureReplayPoseSource` for tests; stall watchdog (no analysed frame for 2 s ⇒ "camera picture has stopped updating"); one frame in flight end to end. Headers: `Permissions-Policy: camera=(self)`, narrow CSP (`worker-src`, `frame-ancestors 'none'`). **Privacy fix:** MediaPipe posts usage metrics to Google from the worker with no opt-out → the worker refuses cross-origin requests (ADR-0010 §9).
-- [x] **S6 live squat page** — `/app/exercises/[id]/live` (linked from the squat page): on-device explainer before the permission prompt, mirrored preview + skeleton, guidance per tracking issue, confidence meter, rep counter that says "Reps paused — tracking not reliable", pause/resume/stop, error states with retry, non-camera path; camera off on leave. Component tests per state; axe + phone width + keyboard in e2e.
-- [x] **S7 exit e2e + benchmarks** — EXIT green ×3 locally: real model in the worker, Chrome fake camera playing the generated mannequin feed (`fake-camera.setup.ts`), 5/5 reps, count frozen while hidden, 0 outbound requests, grab→published latency median 17 ms (end-to-end estimate ≈ 100 ms, ≤ 250). States spec: no person (real model, default fake camera), blocked camera, a11y/phone/keyboard.
-- [~] **S8 client diagnostics → deferred to M3** (cut line). The browser reaches the API only through server actions, so diagnostics would be data leaving the device during a camera session. That breaks the guarantee the EXIT e2e enforces and the copy members see. Even aggregate session summaries are activity data that need a consent decision. They belong with FR-07 session events (`TrackingDegradedEvent`) in M3, together with the viewer error telemetry deferred from M1.
-- [x] **S9 reviews** — security/privacy (#38): approved, 4 Low fixed (cross-origin request check of any method, worker XHR/socket guard, dev bench guard, worker leak on stop mid-start). Code review (#38): changes requested → fixed (stall watchdog, airtight backpressure, bitmap close, double start, analyzer exceptions, focus management, stable engine effect, honest latency label).
+**Exit (verbatim, §11):** "the member can receive a plan, follow a demonstration, complete a tracked workout, and see a saved session summary." **Proven by** `apps/web/tests/e2e/workout-journey.spec.ts` EXIT (#66), green ×3 locally and in CI. Steps: fake-provider plan → squat 3D demo plays from the runner → consented tracked set on the mannequin feed (6/6 reps, count frozen while nobody is in view, no non-GET request while the camera runs, nothing off-origin) → manual sets + a skip → complete → reload → saved summary with the tracked set, `squat.depth.shallow` cues with measurements, the `no_person` span, manual sets and the skip → a second member sees none of it.
 
-Out of scope for M2: real-time cue display, cue selection/cooldown, post-set summary (FR-06 → M3) · session persistence + `SessionEvent` ingestion API (FR-07 → M3) · curl + push-up analyzers (FR-05 → M4) · front-view squat analysis · audio cues · syncing the 3D demo with the live session.
-ADRs: **ADR-0010** (pose runtime: model variant, delegate, asset hosting, frame transport, degradation, test injection) from S0. Amend ADR-0002 only if S0 rejects the worker.
+- [x] S0 Groq spike → **ADR-0006 accepted**: `gpt-oss-120b`, low effort, 100% valid after one repair (#46)
+- [x] S1 contracts: catalogue widened (7 exercises; `animation` optional, `prescription`, `Equipment`), session events + batch + summary, `CUE_RULES` shared with Python (#45); `TrainingPlan` (#50)
+- [x] S2 cue engine (`CueSelector`), squat v4 with `squat.torso.forward_lean`, cue gate (0 false cues on 53 judged reps) (#47, follow-ups #53)
+- [x] S3 live cues + recorder + post-set summary; cue latency median 5–7 ms (#49)
+- [x] S4 LLM layer (groq/fake/ollama, budget guards, telemetry) + plan API (validate → repair once → `needs_review`, versions, idempotency) (#50); no DB connection held during the LLM call (#54, #55)
+- [x] S5 AI eval suite: 20 synthetic profiles, offline in CI, live `make eval-ai`, prompt-hash guard; low effort confirmed (#52)
+- [x] S6 sessions API: ingest (idempotent, consent-gated, declared measurements only), server-side summary, `performance_records`, consent endpoints, delete (#48)
+- [x] S7 **ADR-0011** + per-member IndexedDB outbox, nothing sent while the camera runs, consent UI, privacy copy (#44, #51)
+- [x] S8 plan pages, workout runner, summary, history (#56)
+- [x] S9 EXIT e2e (#66). Milestone code review + security audit: no Blockers; fixes in #67 (plan cap 5/day, sequence grants, fake provider refused outside dev, medical-wording check, server `progress`), #68 + #70 (shared-device sign-out with keep/discard, no cycle between live-coaching and workouts, runner seeded from server, no lost events on re-sign-in), #69 (env fails closed, default privileges revoked)
 
-### M3 — Integrated AI coaching (wk 7–8)
-
-**Exit (verbatim, §11):** "the member can receive a plan, follow a demonstration, complete a tracked workout, and see a saved session summary."
-**Proven by (planned):** `apps/web/tests/e2e/workout-journey.spec.ts` EXIT. Sign in, then generate a plan (`fake` LLM provider; CI never calls a live model). Open today's workout and its squat demo. Do a tracked squat set on the mannequin fake camera (known rep count), then log the remaining exercises and complete. Reload the page: the saved summary shows the same reps, the cues with their `rule_id`, and the tracking-degraded spans. A second member gets 403/404 on that session and that plan.
-
-**Already in the repo:**
-
-- `SessionEvent` zod union (`rep_completed`, `feedback_shown` with `rule_id`/`ruleset_version`/`measurements`, `tracking_degraded`, `set_completed`, client `idempotency_key`). There is no pydantic mirror and no endpoint yet.
-- `FeedbackCue` type. One cue exists (`squat.depth.shallow`, emitted on a counted rep), but nothing displays it, and the fixture labels have no cue annotations.
-- LLM settings in `core/config.py` (`groq`, `openai/gpt-oss-120b`, budget 0). The `services/{plans,evaluation,coaching}` packages are empty.
-- The profile has goal, experience, days/week, session minutes and equipment, which are the inputs for plan generation.
-- DB has only `gyms`, `users`, `gym_memberships`, `member_profiles`. The web `features/{workouts,dashboard}` folders are empty.
-- The live engine and the squat page from M2. The web app reaches the API only through server actions.
-
-**Gaps that shape the plan:**
-
-- **The catalogue holds one exercise.** A plan from a squat-only catalogue can't show equipment or constraint adherence. The contract also requires `animation`.
-- **M2 copy and the EXIT test promise that nothing leaves the device during a camera session.** Saving session data changes that, so it needs an ADR and a consent step before any code.
-
-**Riskiest unknown:** whether a free open-weight model (Groq `gpt-oss-120b`/`-20b`, strict JSON schema, ADR-0006) produces catalogue-valid, constraint-respecting plans often enough, within free-tier rate limits, for validate → repair once → escalate to be a product rather than an error screen. ADR-0006 stays _proposed_ until this is measured.
-
-- [ ] **S0 spike: LLM provider → ADR-0006 accepted or amended** · FR-02, FR-13 · `ai-engineer` · M · deps: none (Groq key in root `.env`)
-  - Draft the `TrainingPlan` schema. Script under `services/api/scripts/` runs ~12 synthetic profiles × 2 models × 3 runs.
-  - Report schema validity, catalogue and equipment adherence, repair-once success, p50/p95 latency, tokens, and 429s hit.
-  - Re-check the Groq ZDR and terms sources (the ADR's sources are a year old by M3).
-  - Throwaway code, numbers in the ADR. Fail criterion: validity after repair below 95% on `120b` ⇒ amend the ADR (other provider, or narrow the generation to choosing from templates).
-- [ ] **S1 contracts: plan, session, catalogue widening** · FR-02, FR-06, FR-07 · `backend-engineer` · M · deps: S0 schema draft, catalogue decision
-  - zod `TrainingPlan` / `PlannedExercise` (weekly schedule, sets, reps or duration, rest, progression) → `export:jsonschema` → pydantic.
-  - Pydantic mirror of `SessionEvent`, plus new `exercise_skipped`, `feedback_acknowledged` and `feedback_dismissed` events, and a `SessionSummary` shape.
-  - Catalogue (owner decision, 2026-10-28): `animation` optional, gated by `supported_capabilities`. Add curl + push-up entries (3D clips and analyzers stay in M4) and ~4 simple approved exercises (e.g. glute bridge, plank, reverse lunge, dumbbell row), logged by hand and labelled "not tracked".
-  - Tests: parity test covers every new schema. Validators reject a non-catalogue `exercise_id`, a missing reps/duration, and a cue event without measurements.
-- [ ] **S2 cue engine + cue regression** · FR-05, FR-06 · `vision-engineer` · M · deps: none (parallel with S0)
-  - `packages/exercise-rules`: cue selection by priority, per-rule cooldown, at most one cue on screen.
-  - A second side-view squat rule (forward torso lean), _uncalibrated_ until fixtures support it.
-  - Plain-language explanation per `message_id`.
-  - `labels.json` gains cue annotations. The vision gate adds a cue false-positive rate and asserts 0 cues inside `untrackable_ranges_ms` and on unsupported clips.
-  - Tests: unit tests (cooldown, priority, unreliable ⇒ no cues), fixture gate in `pnpm test`, and every emitted cue carries `rule_id` + `ruleset_version` + `measurements`.
-- [ ] **S3 live cues + post-set summary (web)** · FR-06 · `vision-engineer` · M · deps: S2
-  - `LiveCoach` shows the current cue with "what this means", acknowledge and dismiss (both recorded as events), set progress, and a "coaching, not medical advice — stop if anything hurts" notice.
-  - Post-set summary is built only from recorded events: reps, cues with measurements, tracking-degraded spans.
-  - Tests: component tests per state. e2e asserts each displayed cue maps to a `feedback_shown` event with the same `rule_id`, no cue while unreliable, and median measurement → cue latency ≤ 250 ms (NFR).
-- [ ] **S4 LLM layer + plan generation API** · FR-02, FR-13 · `ai-engineer` + `backend-engineer` · L · deps: S0, S1
-  - `services/llm`: `generate_structured` with `groq` / `fake` / `ollama` providers, fail-closed budget guard, versioned prompts in `services/plans/prompts/`, call telemetry (latency, tokens, cost, outcome).
-  - `services/plans`: generate → validate (schema, catalogue, equipment, days/week, session minutes) → repair once → else save as `needs_review` with the reasons.
-  - Alembic: `training_plans` (version, status, `prompt_version`, model, generation metadata), `planned_exercises`, RLS.
-  - Endpoints: `POST /training-plans/generate` (Idempotency-Key header), `GET /training-plans/current`, `GET /training-plans` (versions).
-  - Tests: fake-provider unit tests for valid / repaired / escalated / non-catalogue / budget refused / 429 ⇒ "coach is busy" event. The same key twice gives one plan. Cross-member denial. Logs carry no profile fields.
-- [ ] **S5 AI evaluation suite** · FR-02, FR-13, §10 · `ai-engineer` · M · deps: S4
-  - `data/evaluation-fixtures/ai/plans/` holds ~20 synthetic profiles, edge cases included (no equipment, 1 day a week, conflicting goals). `services/evaluation` runner works offline (fake provider, runs in `make verify`) and live (`make eval-ai`).
-  - Reports validity, repair rate, constraint adherence, escalation correctness, latency and cost, written to `docs/evaluation/plans-<prompt_version>.md`.
-  - Tests: the offline run is deterministic and green. Results are stored per prompt version. A changed prompt version without a new report fails CI.
-- [ ] **S6 workout sessions API** · FR-07, FR-05 (record metrics) · `backend-engineer` · L · deps: S1
-  - Alembic: `workout_sessions` (linked to plan version + day), `session_events`, `performance_records`, RLS.
-  - `POST /workout-sessions`, `POST /{id}/events` (batch, validated, deduped by `idempotency_key`, rejected after completion), `POST /{id}/complete` (idempotent; the summary is computed on the server from stored events only), `GET /{id}`, `GET /workout-sessions`.
-  - Tests: pytest integration for duplicate batches (stored once), double complete (one summary), events on someone else's session (denied), events after completion (409), a `feedback_shown` without a known `rule_id` (rejected), and a summary that matches the events.
-- [ ] **S7 ADR-0011 session data flow + client outbox** · FR-07, FR-13, principle 5 · `vision-engineer` + `test-engineer` · M · deps: S1; ADR before S6/S8 code
-  - ADR: what leaves the device (derived events only, never landmarks or frames), when it is sent (at set end and on completion, not per frame), consent and copy, retention.
-  - IndexedDB outbox that survives a reload and retries on reconnect, sent through server actions. `tracking_degraded` events are emitted (the S8 item deferred from M2).
-  - Update the M2 privacy copy, and change the M2 EXIT assertion to "only own-origin, `SessionEvent`-shaped payloads; no images or landmarks".
-  - Tests: outbox unit tests (offline → reload → flush, sent once). e2e: go offline mid-workout, finish, come back online, and the session is saved once.
-- [ ] **S8 member workout flow (web)** · FR-02 (view), FR-07, FR-03 (sync deferred from M1) · `threed-engineer` (demo link) + `backend-engineer` (actions) · L · deps: S4, S6, S7
-  - Plan page (current + previous versions, generate/regenerate, `needs_review` state).
-  - "Today's workout" runner: current exercise, sets/reps, rest timer, instructions, link to the demo. Squat sets are tracked live. Other exercises are logged by hand, labelled "not tracked".
-  - Skip, perceived difficulty and an optional note, complete, then the session summary and history pages.
-  - Tests: component tests, axe, phone width, keyboard. Reload in the middle of a workout and after completing it.
-- [ ] **S9 EXIT e2e + reviews** · all M3 FRs · `test-engineer`, `code-reviewer`, `security-privacy-reviewer` · M · deps: S3–S8
-  - `workout-journey.spec.ts` EXIT as above, green ×3.
-  - Traceability rows for FR-02/06/07/13 updated.
-  - Security and privacy review of the LLM context (no PII beyond the authorized profile fields), session data, idempotency and RLS. Independent code review.
-
-**Out of scope for M3:** nutrition (FR-08), coaching chat (FR-09), progress dashboard and adaptive adjustments (FR-10), all → M4 · curl and push-up analyzers and clips → M4 (catalogue entries only) · trainer review of `needs_review` plans and an escalations table → M5 (M3 only stores the status and shows the member "a trainer needs to check this plan") · viewer error telemetry and an admin health view → M5 · audio cues, front-view analysis.
-**ADRs:** ADR-0006 accept/amend (S0) · **ADR-0011** session data leaving the device, consent, outbox (S7, before S6 code) · plan versioning and `needs_review` lifecycle as an amendment to ADR-0004 (S4).
+Evidence: hosted DB at `0007`. Live eval `docs/evaluation/plans-plan-v1.md` (35/35 valid after repair, 0 constraint violations, p50 4.5 s, ≈$0.001/plan list price, $0 billed).
+Accepted limitations: cue thresholds (depth 120°, lean 60°) are **uncalibrated**. No real rep has a shallow or forward-lean judgement, so the gate proves the rules stay quiet, not that they fire. A failed camera attempt's genuinely shown cues and counted reps stay in the summary (ADR-0011). Budget guards are per process (one worker only). The medical-wording check can send a legitimate plan to `needs_review`.
+Deferred from M3: controlled plan modification and adjustments → M4 (FR-02/FR-10) · trainer review of `needs_review` plans, human escalation path and **re-consent before trainers can read gym-tagged sessions** → M5 (FR-06, FR-11; bump `TRACKING_CONSENT_VERSION`) · pose-tracking failures as server-side diagnostic events → M5 (FR-13, needs a consent decision) · server-side pause state (pause is client-only) · Dependabot PRs #57–#65 (re-vendor + re-pin MediaPipe per ADR-0010 before taking `tasks-vision` 1.2.0; vitest 5 is a major).
 
 ### M4 — Full member experience (wk 9–10)
 
@@ -134,10 +56,10 @@ ADRs: **ADR-0010** (pose runtime: model variant, delegate, asset hosting, frame 
 ## Open decisions
 
 - API host (Render vs Railway vs Fly) — decide at M5 (ADR-0005)
-- LLM provider: Groq free tier proposed (ADR-0006) — confirm in M3 S0 via validity/repair rates
 
 ## Session log (newest first, 1 line each)
 
+- 2026-11-03 — M3 done (#43–#70): plans via Groq (ADR-0006 accepted), sessions + outbox + consent (ADR-0011), cue engine + live cues, runner + summary, eval suite, EXIT e2e; milestone reviews fixed; hosted DB at 0007.
 - 2026-10-28 — M1 planned and done (#26–#32): generated avatar (ADR-0009), contract timeline, viewer + library, exit e2e; reviews fixed; racy M0 cross-member e2e fixed.
 - 2026-10-28 — M0 merged (#15–#24), hosted migrations applied, spike test user removed.
 - 2026-10-28 — M0 S2–S8: DB+RLS, JWKS auth, profiles API, logging, web auth, shell/onboarding/profile; reviews fixed.
