@@ -83,7 +83,9 @@ export function seedFromServer(progress: Progress, server: ServerProgress | null
     if (!/^[a-z0-9_]+$/.test(id)) continue;
     const current = of(progress, id);
     const known = new Set(current.sets.map((s) => s.set_index));
-    const missing = remote.set_indexes.filter((i) => Number.isInteger(i) && i >= 0 && !known.has(i));
+    const missing = remote.set_indexes.filter(
+      (i) => Number.isInteger(i) && i >= 0 && !known.has(i),
+    );
     const sets = missing.length
       ? [
           ...current.sets,
