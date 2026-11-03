@@ -21,7 +21,7 @@
     "three": "0.186.1",
     "tsx": "^4",
     "typescript": "^5",
-    "vitest": "^4"
+    "vitest": "^5"
   },
   "dependencies": {
     "@fitpilot/exercise-contracts": "workspace:*"
