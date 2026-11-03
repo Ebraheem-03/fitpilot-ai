@@ -17,7 +17,7 @@ export function AppNav({ role }: { role: Role }) {
               <Link
                 href={href}
                 aria-current={current ? "page" : undefined}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                className={`rounded-md px-2 py-1.5 text-sm font-medium sm:px-3 ${
                   current ? "bg-surface text-foreground" : "text-muted hover:text-foreground"
                 }`}
               >

@@ -22,11 +22,12 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
         Skip to content
       </a>
       <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-4 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
           <Link href="/app" className="font-semibold tracking-tight text-brand">
             FitPilot
           </Link>
-          <div className="flex-1">
+          {/* own row on a phone so five links never wrap into the brand/sign-out row */}
+          <div className="order-last w-full sm:order-none sm:w-auto sm:flex-1">
             <Suspense fallback={<div className="h-8" aria-hidden />}>
               <RoleNav />
             </Suspense>

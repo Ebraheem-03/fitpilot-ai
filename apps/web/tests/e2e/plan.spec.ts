@@ -11,7 +11,7 @@ const planView = (page: Page) => page.getByTestId("plan-view").filter({ visible:
 async function openPlan(page: Page) {
   await page
     .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "My plan" })
+    .getByRole("link", { name: "Plan" })
     .click();
   await expect(page).toHaveURL(/\/app\/plan$/);
 }

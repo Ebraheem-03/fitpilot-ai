@@ -47,7 +47,7 @@ test("member nav shows member links only; staff pages are not found", async ({ p
   const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav.getByRole("link")).toHaveText([
     "Home",
-    "My plan",
+    "Plan",
     "Workouts",
     "Exercises",
     "Profile",
