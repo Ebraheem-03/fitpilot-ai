@@ -28,10 +28,14 @@ def _template(version: str, part: str) -> Template:
     return Template((PROMPT_DIR / f"{version}.{part}.md").read_text())
 
 
-def prompt_sha256(version: str = PROMPT_VERSION) -> str:
+def prompt_sha256(version: str = PROMPT_VERSION, directory: Path = PROMPT_DIR) -> str:
+    """Hash of the prompt files' bytes with CRLF normalised to LF, so a checkout that converted
+    line endings (Windows autocrlf) gets the same hash as the one the eval report recorded.
+    Files that are already LF hash exactly as before. Covers only these files: not the catalogue
+    rendering, the plan schema or the model settings (docs/evaluation/README.md)."""
     digest = hashlib.sha256()
     for part in PARTS:
-        digest.update((PROMPT_DIR / f"{version}.{part}.md").read_bytes())
+        digest.update((directory / f"{version}.{part}.md").read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 

@@ -7,6 +7,7 @@ import {
   evaluateClip,
   type FeedbackCue,
   type RepCounter,
+  rulesLackingJudgement,
 } from "../src";
 
 /** 30 fps clip of `seconds`, every frame with all landmarks visible except where `blank(t)`. */
@@ -316,5 +317,68 @@ describe("cue scoring (M3 S2)", () => {
     });
     const e = evaluateClip(scripted([2900]), fixture(10), l, 300);
     expect(aggregateCues([e]).recall).toBeNull();
+  });
+
+  describe("not_judged entries", () => {
+    const notJudged = (over: Record<string, unknown> = {}) =>
+      labels(REPS, {
+        cue_labels: {
+          rules: [
+            {
+              rule_id: "r.x",
+              method: "not_judged",
+              expected_reps: [],
+              not_expected_reps: [],
+              ...over,
+            },
+          ],
+        },
+      });
+
+    it("leave cues on labelled reps unjudged but still score stray cues as wrong", () => {
+      const e = evaluateClip(
+        scripted([2900, 5900, 8900], { 2900: ["r.x"] }, [3500]),
+        fixture(10),
+        notJudged(),
+        300,
+      );
+      expect(e.cueScores[0]).toMatchObject({
+        method: "not_judged",
+        expected: 0,
+        judgedNegatives: 0,
+        truePositives: 0,
+        falsePositives: 1,
+        stray: 1,
+        unjudged: 1,
+      });
+    });
+
+    it("never count as a judgement, even if their lists were filled in by mistake", () => {
+      // the contract rejects this file; the scorer must not depend on that
+      const e = evaluateClip(
+        scripted([2900, 5900], { 5900: ["r.x"] }),
+        fixture(10),
+        notJudged({ expected_reps: [0], not_expected_reps: [1] }),
+        300,
+      );
+      expect(e.cueScores[0]).toMatchObject({ judgedNegatives: 0, falsePositives: 0, unjudged: 1 });
+    });
+
+    it("leave a rule lacking judgement until a real judgement exists elsewhere", () => {
+      const unjudged = evaluateClip(scripted([2900]), fixture(10), notJudged(), 300);
+      const s1 = aggregateCues([unjudged]);
+      expect(rulesLackingJudgement(s1, ["r.x"])).toEqual(["r.x"]);
+      expect(s1.byRule["r.x"]!.judgedBy).toEqual([]);
+
+      const judged = evaluateClip(scripted([2900]), fixture(10), cueLabels(), 300);
+      const s2 = aggregateCues([unjudged, judged]);
+      expect(rulesLackingJudgement(s2, ["r.x"])).toEqual([]);
+      expect(s2.byRule["r.x"]!.judgedBy).toEqual(["by_eye"]);
+    });
+
+    it("report a declared rule nobody annotated at all as lacking judgement", () => {
+      const e = evaluateClip(scripted([2900]), fixture(10), cueLabels(), 300);
+      expect(rulesLackingJudgement(aggregateCues([e]), ["r.x", "r.y"])).toEqual(["r.y"]);
+    });
   });
 });

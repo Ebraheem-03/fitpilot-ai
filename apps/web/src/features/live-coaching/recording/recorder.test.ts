@@ -130,7 +130,7 @@ describe("SessionRecorder (FR-06/FR-07 events from the live engine, ADR-0011)", 
     ]);
   });
 
-  it("maps every tracking issue onto the contract's reasons (a stall counts as slow_device)", () => {
+  it("maps every tracking issue onto the contract's reasons (a stall is camera_stalled)", () => {
     const cases: [TrackingIssue, string][] = [
       ["no_person", "no_person"],
       ["out_of_frame", "out_of_frame"],
@@ -138,7 +138,7 @@ describe("SessionRecorder (FR-06/FR-07 events from the live engine, ADR-0011)", 
       ["low_light", "low_light"],
       ["slow_device", "slow_device"],
       ["unsupported_view", "unsupported_view"],
-      ["no_frames", "slow_device"],
+      ["no_frames", "camera_stalled"],
     ];
     for (const [issue, reason] of cases) {
       const r = recorder();

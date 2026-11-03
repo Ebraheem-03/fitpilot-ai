@@ -66,4 +66,8 @@ class WorkoutSessionPage(BaseModel):
 
 class EventIngestResult(BaseModel):
     accepted: int
+    # Events whose idempotency_key was already stored (or repeated in the batch): not stored again
     duplicates: int
+    # Of those, how many carried a different payload than the one kept. The first stored event
+    # wins; this only makes a misbehaving client visible.
+    conflicting_duplicates: int = 0

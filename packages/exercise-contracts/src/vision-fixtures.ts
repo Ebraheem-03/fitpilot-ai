@@ -85,9 +85,12 @@ export const CueRuleLabel = z.object({
    * How the judgement was made, so the gate's evidence is honest about its source:
    * - `by_eye`: a person judged the movement from the video or frame sheets;
    * - `from_rep_labels`: derived mechanically from a by-eye rep label (e.g. `full_depth`);
-   * - `synthetic_ground_truth`: the generated mannequin, whose motion is known by construction.
+   * - `synthetic_ground_truth`: the generated mannequin, whose motion is known by construction;
+   * - `not_judged`: nobody judged this rule on this clip (both lists stay empty). The entry still
+   *   matters: a cue of the rule outside every labelled rep is scored as wrong. It never counts
+   *   as evidence that the rule was judged.
    */
-  method: z.enum(["by_eye", "from_rep_labels", "synthetic_ground_truth"]),
+  method: z.enum(["by_eye", "from_rep_labels", "synthetic_ground_truth", "not_judged"]),
   /** reps on which the cue is warranted */
   expected_reps: z.array(z.number().int().nonnegative()),
   /** reps on which the cue would be wrong */
@@ -153,6 +156,18 @@ export const ClipLabels = z
       }
       if (new Set(all).size !== all.length) {
         ctx.addIssue({ code: "custom", path, message: "a rep is listed twice for one rule" });
+      }
+      // a method names where a judgement came from, so a judged rule must judge something, and
+      // an unjudged one must not smuggle judgements in
+      if (rule.method === "not_judged" && all.length > 0) {
+        ctx.addIssue({ code: "custom", path, message: "a not_judged rule can't list reps" });
+      }
+      if (rule.method !== "not_judged" && all.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path,
+          message: `${rule.method} lists no reps: use method "not_judged"`,
+        });
       }
     });
   });

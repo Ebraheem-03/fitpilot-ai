@@ -4,6 +4,7 @@ import {
   ExerciseContract,
   type LandmarkFixture,
 } from "@fitpilot/exercise-contracts";
+import { RULES_BY_EXERCISE } from "@fitpilot/exercise-rules";
 import { useEffect, useRef, useState } from "react";
 import squatCatalog from "../../../../../../data/exercise-catalog/bodyweight_squat.json";
 import { AvatarSource } from "../bench/avatar-source";
@@ -12,9 +13,23 @@ import { drawSkeleton } from "../skeleton";
 import { defaultAssetBases, PoseWorkerClient } from "../worker/pose-client";
 import type { PoseModel } from "../worker/protocol";
 import { extractLandmarks, type StepSource, videoFileSource } from "./extract";
-import { buildLandmarkFixture, type CapturedFrame, mannequinLabels } from "./fixture";
+import {
+  buildCueLabels,
+  buildLandmarkFixture,
+  type CapturedFrame,
+  CUE_JUDGEMENTS,
+  type CueJudgement,
+  mannequinLabels,
+} from "./fixture";
 
 const squat = ExerciseContract.parse(squatCatalog);
+/** the cue rules a person can judge per rep: every rule the squat analyzer may emit */
+const CUE_RULES = RULES_BY_EXERCISE[squat.id] ?? [];
+const JUDGEMENT_TEXT: Record<CueJudgement, string> = {
+  not_judged: "not judged",
+  expected: "cue expected",
+  not_expected: "cue not expected",
+};
 type Status = "idle" | "extracting" | "done" | "error";
 type Rep = ClipLabels["reps"][number];
 
@@ -35,7 +50,8 @@ function download(name: string, data: unknown) {
 
 /**
  * M2 S2 dev tool: turns a local recording (or the synthetic mannequin) into a landmark fixture
- * with the runtime worker, and lets a person annotate reps → labels.json. The video is only
+ * with the runtime worker, and lets a person annotate reps, and per rep which cue rules they
+ * expect (M3: `cue_labels`, by eye) → labels.json. The video is only
  * read from disk into this tab; nothing is uploaded and no video is written anywhere.
  */
 export function CaptureTool() {
@@ -65,11 +81,18 @@ export function CaptureTool() {
   const [notes, setNotes] = useState("");
   const [annotator, setAnnotator] = useState("owner");
   const [reps, setReps] = useState<Rep[]>([]);
+  /** per rep (same index as `reps`): rule_id → what a person expects; missing = not judged */
+  const [repCues, setRepCues] = useState<Record<string, CueJudgement>[]>([]);
   const [draft, setDraft] = useState<{ start?: number; bottom?: number }>({});
   const [gaps, setGaps] = useState<[number, number][]>([]);
   const [gapStart, setGapStart] = useState<number | null>(null);
   const [autoLabels, setAutoLabels] = useState<ClipLabels | null>(null);
 
+  const cueLabels = buildCueLabels({
+    ruleIds: CUE_RULES.map((r) => r.rule_id),
+    supported,
+    judgements: repCues,
+  });
   const labels: ClipLabels | null = autoLabels ?? {
     format_version: 1,
     clip_id: clipId,
@@ -86,6 +109,7 @@ export function CaptureTool() {
     reps,
     untrackable_ranges_ms: gaps,
     annotated_by: annotator,
+    ...(cueLabels ? { cue_labels: cueLabels } : {}),
   };
 
   useEffect(() => {
@@ -417,6 +441,7 @@ export function CaptureTool() {
                     full_depth: true,
                   },
                 ]);
+                setRepCues((c) => [...c, {}]);
                 setDraft({});
               }}
             >
@@ -440,7 +465,10 @@ export function CaptureTool() {
               type="button"
               className={field}
               disabled={reps.length === 0}
-              onClick={() => setReps((r) => r.slice(0, -1))}
+              onClick={() => {
+                setReps((r) => r.slice(0, -1));
+                setRepCues((c) => c.slice(0, -1));
+              }}
             >
               Undo last rep
             </button>
@@ -463,10 +491,42 @@ export function CaptureTool() {
             {draft.start !== undefined && ` · marking rep from ${draft.start} ms`}
             {gaps.length > 0 && ` · untrackable: ${gaps.map(([a, b]) => `${a}–${b}`).join(", ")}`}
           </p>
+          <p className="text-xs text-muted-foreground">
+            Cues per rep: mark what you see in the video, never what the analyzer showed. A rule
+            left &ldquo;not judged&rdquo; on every rep is written as <code>not_judged</code>.
+            {!supported && " Unsupported setups get no cue labels: any cue there is wrong."}
+          </p>
           <ol className="list-decimal pl-6 text-xs">
-            {reps.map((r) => (
-              <li key={r.start_ms}>
+            {reps.map((r, i) => (
+              <li key={r.start_ms} className="py-1">
                 {r.start_ms} → {r.bottom_ms} → {r.end_ms} ms{r.full_depth ? "" : " (shallow)"}
+                <span className="ml-3 inline-flex flex-wrap gap-3">
+                  {CUE_RULES.map((rule) => (
+                    <label key={rule.rule_id} className="inline-flex items-center gap-1">
+                      <span>{rule.rule_id}</span>
+                      <select
+                        className={field}
+                        aria-label={`Rep ${i + 1} cue ${rule.rule_id}`}
+                        disabled={!supported}
+                        value={repCues[i]?.[rule.rule_id] ?? "not_judged"}
+                        onChange={(e) => {
+                          const value = e.target.value as CueJudgement;
+                          setRepCues((c) =>
+                            c.map((judged, j) =>
+                              j === i ? { ...judged, [rule.rule_id]: value } : judged,
+                            ),
+                          );
+                        }}
+                      >
+                        {CUE_JUDGEMENTS.map((j) => (
+                          <option key={j} value={j}>
+                            {JUDGEMENT_TEXT[j]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </span>
               </li>
             ))}
           </ol>

@@ -10,6 +10,7 @@ import time
 import uuid
 from collections import Counter
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
@@ -81,6 +82,11 @@ class PlanNotFound(Exception):
 
 class PlanDayOutOfRange(Exception):
     """`plan_day_index` is not a day of that plan."""
+
+
+def _without_nulls(payload: dict[str, Any]) -> dict[str, Any]:
+    """Rows stored before optional fields stopped accepting null may still carry them."""
+    return {k: v for k, v in payload.items() if v is not None}
 
 
 def _owned(
@@ -217,16 +223,25 @@ def ingest_events(
         raise reject("invalid_events", InvalidEvents(errors), invalid_count=len(errors))
 
     keys = {e.idempotency_key for e in events}
-    new_keys = keys - repo.existing_keys(db, session_id, keys)
+    stored_before = repo.stored_payloads(db, session_id, keys)
+    new_keys = keys - stored_before.keys()
     if repo.count_events(db, session_id) + len(new_keys) > MAX_EVENTS_PER_SESSION:
         raise reject("event_limit_reached", EventLimitReached())
 
-    seen: set[str] = set()
+    # A repeated key is a duplicate and the first stored event wins, even when the payload
+    # differs; those are counted apart (a retrying client resends identical events).
+    first_seen: dict[str, dict[str, Any]] = {}
+    conflicting = 0
     rows = []
     for e in events:
-        if e.idempotency_key in seen or e.idempotency_key not in new_keys:
+        # Optional fields are omitted, never null (zod `.optional()`, PR #45 nit #1).
+        payload = e.model_dump(mode="json", exclude_none=True)
+        known = stored_before.get(e.idempotency_key) or first_seen.get(e.idempotency_key)
+        if known is not None:
+            if _without_nulls(known) != payload:
+                conflicting += 1
             continue
-        seen.add(e.idempotency_key)
+        first_seen[e.idempotency_key] = payload
         rows.append(
             {
                 "session_id": session_id,
@@ -234,14 +249,23 @@ def ingest_events(
                 "type": SessionEventType(e.type),
                 "exercise_id": e.exercise_id,
                 "occurred_at": e.occurred_at,
-                # Optional fields are omitted, never null (zod `.optional()`, PR #45 nit #1).
-                "payload": e.model_dump(mode="json", exclude_none=True),
+                "payload": payload,
             }
         )
     accepted = repo.insert_events(db, rows)
     db.commit()
 
-    result = EventIngestResult(accepted=accepted, duplicates=len(events) - accepted)
+    result = EventIngestResult(
+        accepted=accepted, duplicates=len(events) - accepted, conflicting_duplicates=conflicting
+    )
+    if conflicting:
+        log_event(
+            logger,
+            "session.events_conflicting_duplicates",
+            logging.WARNING,
+            session_id=str(session_id),
+            count=conflicting,
+        )
     log_event(
         logger,
         "session.events_ingested",
@@ -249,6 +273,7 @@ def ingest_events(
         received=len(events),
         accepted=result.accepted,
         duplicates=result.duplicates,
+        conflicting_duplicates=result.conflicting_duplicates,
         type_counts=dict(Counter(e.type for e in events)),
         duration_ms=round((time.perf_counter() - started) * 1000, 2),
     )

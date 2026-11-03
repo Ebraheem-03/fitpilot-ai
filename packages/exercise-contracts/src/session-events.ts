@@ -88,6 +88,10 @@ export const FeedbackDismissedEvent = z.strictObject({
   type: z.literal("feedback_dismissed"),
 });
 
+/**
+ * Why tracking was unreliable. `slow_device`: frames arrive but too few per second to analyse;
+ * `camera_stalled`: no frame was analysed at all for a while (frozen camera, background tab).
+ */
 export const TRACKING_DEGRADED_REASONS = [
   "low_visibility",
   "out_of_frame",
@@ -95,6 +99,7 @@ export const TRACKING_DEGRADED_REASONS = [
   "unsupported_view",
   "no_person",
   "slow_device",
+  "camera_stalled",
 ] as const;
 export const TrackingDegradedReason = z.enum(TRACKING_DEGRADED_REASONS);
 

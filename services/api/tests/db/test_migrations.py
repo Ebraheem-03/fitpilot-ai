@@ -18,6 +18,7 @@ EXPECTED_TABLES = {
     "performance_records",
     "training_plans",
     "planned_exercises",
+    "plan_generation_claims",
 }
 
 

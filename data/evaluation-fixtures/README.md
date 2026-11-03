@@ -1,5 +1,7 @@
 # Evaluation fixtures
 
+> **Open calibration need (squat cues, FR-06).** The two squat cue rules, `squat.depth.shallow` and `squat.torso.forward_lean`, are **uncalibrated**. Their thresholds can't be calibrated until the set has **real recordings of shallow squats and of squats with a strong forward lean, annotated by eye**. Every labelled rep today is full depth, and lean has never been judged by eye on a real clip, so the gate can show that the cues stay quiet when they should but not that they fire when they should. Record per the [protocol](#recording-protocol-bodyweight-squat-m2-s3) (row 7, plus a forward-lean set), annotate the cues per rep in `/dev/capture`, then bump the ruleset version and cite the gate numbers. Never derive these labels from landmark traces or analyzer output, and never make them up.
+
 ## vision/
 
 Annotated landmark sequences for vision regression tests (FR-05, blueprint §14). **No video files in git** (`.gitignore` enforces it). The schemas are `LandmarkFixture`, `ClipLabels` and `VisionGate` in `packages/exercise-contracts/src/vision-fixtures.ts`.
@@ -59,7 +61,7 @@ vision/<exercise_id>/<clip_id>.labels.json       # human annotation
 
 #### Cue annotations (`cue_labels`, M3 S2)
 
-Optional, and only on `supported` clips. Per feedback rule, the indices of the reps on which a person expects the cue and the reps on which the cue would be wrong. Reps in neither list are unjudged for that rule.
+Optional, and only on `supported` clips. Per feedback rule, the indices of the reps on which a person expects the cue and the reps on which the cue would be wrong. Reps in neither list are unjudged for that rule. `/dev/capture` writes this block for you (per rep: cue expected / not expected / not judged).
 
 ```json
 "cue_labels": {
@@ -75,9 +77,10 @@ Optional, and only on `supported` clips. Per feedback rule, the indices of the r
 }
 ```
 
-- `method` says where the judgement came from. `by_eye` means a person watched the video or frame sheets. `from_rep_labels` means it was derived mechanically from a by-eye rep label (for example `full_depth`). `synthetic_ground_truth` means the generated mannequin, whose motion is known by construction.
+- `method` says where the judgement came from. `by_eye` means a person watched the video or frame sheets. `from_rep_labels` means it was derived mechanically from a by-eye rep label (for example `full_depth`). `synthetic_ground_truth` means the generated mannequin, whose motion is known by construction. `not_judged` means nobody judged the rule on this clip.
+- A `not_judged` entry has both lists empty, and any other method must list at least one rep (the loader rejects both mistakes). A `not_judged` entry is still worth writing: a cue of that rule outside every labelled rep is scored as wrong. But it never counts as a judgement, so it can't satisfy "every declared rule is judged".
 - A cue is attributed to the labelled rep whose tolerance window contains it and whose end is nearest. A cue of an annotated rule outside every labelled rep, or a second one on the same rep, is a stray and always counts as wrong.
-- The cue gate (`gate.cues`) scores the analyzer's raw cues, before cooldown could hide any. The false-positive rate is false cues ÷ (`not_expected` reps + stray cues). It must stay at or below `max_false_positive_rate`, over at least `min_judged_negatives` judged reps, and every declared rule must be judged on at least one rep. Two checks always apply, with or without annotations: **no cue inside `untrackable_ranges_ms`, and no cue on an unsupported clip**. A meta-test confirms that a ruleset which cues every rep fails the gate.
+- The cue gate (`gate.cues`) scores the analyzer's raw cues, before cooldown could hide any. The false-positive rate is false cues ÷ (`not_expected` reps + stray cues). It must stay at or below `max_false_positive_rate`, over at least `min_judged_negatives` judged reps, and every declared rule must be judged `not_expected` on at least one rep by a real judgement (`by_eye`, `from_rep_labels` or `synthetic_ground_truth`; never `not_judged`). The gate's table shows which methods judged each rule. Two checks always apply, with or without annotations: **no cue inside `untrackable_ranges_ms`, and no cue on an unsupported clip**. A meta-test confirms that a ruleset which cues every rep fails the gate.
 
 Coverage goal per exercise: varied camera distance and angle, lighting, clothing and body proportions. Record only people who consented. Only the derived JSON is committed. Landmarks carry no image, but they are still body data, so record yourself or people who agreed to have their movement published.
 
@@ -103,7 +106,7 @@ Record yourself, or people who agreed to have their movement data published. Use
 
 Then, for each clip: run `make dev`, open `/dev/capture`, pick the file, set the clip id (`squat_side_001`, …), and click **Extract landmarks**. Set the camera, facing, lighting, clothing and distance fields, and set "supported" to off for row 10. Scrub through the video and mark each rep's start, bottom and end, plus any untrackable span (row 8). Download both JSON files into `vision/bodyweight_squat/`. Repeat with the model set to "full" (suffix `_full`) so S4 can compare the two models.
 
-The cue rules most need positive examples: row 7 (shallow reps), and a side-view set with about half the reps leaning the chest well forward. `/dev/capture` doesn't write `cue_labels` yet. While watching the video, add them to `labels.json` by hand with `"method": "by_eye"`, and copy them into the `_full` labels.
+The cue rules most need positive examples: row 7 (shallow reps), and a side-view set with about half the reps leaning the chest well forward. While watching the video, set each rep's cue controls in `/dev/capture` (cue expected / not expected / not judged). Judge from the video only, never from the skeleton overlay or the analyzer. A rule judged on any rep is written as `by_eye`; a rule left unjudged on every rep is written as `not_judged`. Unsupported setups get no cue labels. Copy the `cue_labels` block into the `_full` labels.
 
 ### Pexels clips (M2 S3)
 
@@ -147,7 +150,7 @@ The recorded fixtures come from 25 stock videos on [Pexels](https://www.pexels.c
 **How the cue labels were made (M3 S2).** The source videos had been deleted, so no new by-eye judgement was possible, and none of these labels came from landmark traces or analyzer output:
 
 - `squat.depth.shallow` on the Pexels clips is `from_rep_labels`. It is derived from the by-eye `full_depth` field above, so a full-depth rep is `not_expected`. All 48 labelled reps are full depth, so the set has **no positive (shallow) example**.
-- `squat.torso.forward_lean` on the Pexels clips is **not judged on any rep**. The entry exists with empty lists, so only stray cues (outside every labelled rep) are scored.
+- `squat.torso.forward_lean` on the Pexels clips is `not_judged`. Only stray cues (outside every labelled rep) are scored. `pexels_4838146` has no labelled rep at all, so both rules are `not_judged` there.
 - On the mannequin side clips, both rules are `synthetic_ground_truth`, and every rep is `not_expected`. Each rep reaches the authored full depth, and the authored trunk hinge is pelvis 18° + spine 10° + chest 8° (`packages/avatar/src/clips/squat.ts`). The lean measures about 29°.
 - Still missing: shallow reps and reps with a strong forward lean judged by eye. Until those exist, the gate can show that the rules stay quiet when they should, but it can't show that they fire when they should.
 

@@ -6,7 +6,7 @@ import {
 } from "@fitpilot/exercise-contracts";
 import { describe, expect, it } from "vitest";
 import { LANDMARK_STRIDE, POSE_LANDMARK_COUNT } from "../worker/protocol";
-import { buildLandmarkFixture, mannequinLabels, packLandmarks } from "./fixture";
+import { buildCueLabels, buildLandmarkFixture, mannequinLabels, packLandmarks } from "./fixture";
 
 function raw(fill: (i: number) => number) {
   const a = new Float32Array(POSE_LANDMARK_COUNT * LANDMARK_STRIDE);
@@ -103,5 +103,74 @@ describe("mannequinLabels", () => {
     });
     expect(l.reps.map((r) => r.start_ms)).toEqual([500, 8500]);
     expect(l.untrackable_ranges_ms).toEqual([[4000, 8000]]);
+  });
+});
+
+describe("buildCueLabels", () => {
+  const ruleIds = ["squat.depth.shallow", "squat.torso.forward_lean"];
+  const reps = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      start_ms: i * 3000 + 500,
+      bottom_ms: i * 3000 + 1500,
+      end_ms: i * 3000 + 2500,
+      full_depth: true,
+    }));
+  const parse = (cue_labels: ClipLabels["cue_labels"], n: number, supported = true) =>
+    ClipLabels.parse({
+      format_version: 1,
+      clip_id: "squat_side_007",
+      exercise_id: "bodyweight_squat",
+      camera_view: supported ? "side" : "front",
+      supported,
+      conditions: { lighting: "normal", clothing: "fitted" },
+      reps: reps(n),
+      untrackable_ranges_ms: [],
+      annotated_by: "owner",
+      ...(cue_labels ? { cue_labels } : {}),
+    });
+
+  it("writes judged rules as by_eye with rep indices, unjudged ones as not_judged", () => {
+    const cue = buildCueLabels({
+      ruleIds,
+      supported: true,
+      judgements: [
+        { "squat.depth.shallow": "not_expected" },
+        { "squat.depth.shallow": "expected", "squat.torso.forward_lean": "not_judged" },
+        {},
+      ],
+    });
+    expect(cue).toEqual({
+      rules: [
+        {
+          rule_id: "squat.depth.shallow",
+          method: "by_eye",
+          expected_reps: [1],
+          not_expected_reps: [0],
+        },
+        {
+          rule_id: "squat.torso.forward_lean",
+          method: "not_judged",
+          expected_reps: [],
+          not_expected_reps: [],
+        },
+      ],
+    });
+    expect(parse(cue, 3).cue_labels).toEqual(cue);
+  });
+
+  it("writes every rule as not_judged when nothing was judged (stray cues still count)", () => {
+    const cue = buildCueLabels({ ruleIds, supported: true, judgements: [{}, {}] });
+    expect(cue?.rules.map((r) => r.method)).toEqual(["not_judged", "not_judged"]);
+    expect(() => parse(cue, 2)).not.toThrow();
+  });
+
+  it("writes nothing for an unsupported setup (the contract forbids cue labels there)", () => {
+    const cue = buildCueLabels({
+      ruleIds,
+      supported: false,
+      judgements: [{ "squat.depth.shallow": "expected" }],
+    });
+    expect(cue).toBeUndefined();
+    expect(() => parse(cue, 1, false)).not.toThrow();
   });
 });

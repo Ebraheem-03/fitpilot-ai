@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -225,13 +225,18 @@ def test_list_limit(api: TestClient) -> None:
     assert api.get(PLANS, params={"limit": 0}, headers=h).status_code == 422
 
 
-def test_generation_in_progress_is_409(api: TestClient, engine: Engine) -> None:
+def test_generation_in_progress_is_409(api: TestClient, db: Session) -> None:
     sub, h = member(api)
-    with engine.connect() as other:  # another request holding this member's generation lock
-        other.execute(text("SELECT pg_advisory_xact_lock(4202, hashtext(:u))"), {"u": str(sub)})
-        with llm(FakeReply.ok(VALID_PLAN)) as (_, fake):
-            r = generate(api, h)
-        other.rollback()
+    # another request holds this member's generation claim (more: test_plan_generation_claims)
+    db.execute(
+        text(
+            "INSERT INTO plan_generation_claims (user_id, idempotency_key) "
+            "VALUES (:u, 'other-key-0001')"
+        ),
+        {"u": sub},
+    )
+    with llm(FakeReply.ok(VALID_PLAN)) as (_, fake):
+        r = generate(api, h)
     assert r.status_code == 409 and r.json()["detail"]["code"] == "generation_in_progress"
     assert r.headers["retry-after"] == "5"
     assert fake.calls == []

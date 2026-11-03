@@ -77,7 +77,7 @@ def test_events_are_stored_and_counted(api: TestClient, db: Session) -> None:
     sid = start(api, h)
     r = send(api, h, sid, [rep(sid, 0, 0), rep(sid, 0, 1), shown(sid), set_completed(sid, 0, 2)])
     assert r.status_code == 200
-    assert r.json() == {"accepted": 4, "duplicates": 0}
+    assert r.json() == {"accepted": 4, "duplicates": 0, "conflicting_duplicates": 0}
     assert stored(db) == 4
 
 
@@ -87,9 +87,9 @@ def test_a_resent_batch_is_stored_once(api: TestClient, db: Session) -> None:
     batch = [rep(sid, 0, 0), rep(sid, 0, 1), set_completed(sid, 0, 2)]
     first = send(api, h, sid, batch)
     again = send(api, h, sid, batch)
-    assert first.json() == {"accepted": 3, "duplicates": 0}
+    assert first.json() == {"accepted": 3, "duplicates": 0, "conflicting_duplicates": 0}
     assert again.status_code == 200
-    assert again.json() == {"accepted": 0, "duplicates": 3}
+    assert again.json() == {"accepted": 0, "duplicates": 3, "conflicting_duplicates": 0}
     assert stored(db) == 3
 
 
@@ -99,7 +99,7 @@ def test_partial_overlap_stores_only_the_new_events(api: TestClient, db: Session
     old = [rep(sid, 0, 0), rep(sid, 0, 1)]
     send(api, h, sid, old)
     r = send(api, h, sid, [*old, rep(sid, 0, 2)])
-    assert r.json() == {"accepted": 1, "duplicates": 2}
+    assert r.json() == {"accepted": 1, "duplicates": 2, "conflicting_duplicates": 0}
     assert stored(db) == 3
 
 
@@ -108,8 +108,62 @@ def test_the_same_key_twice_in_one_batch_is_stored_once(api: TestClient, db: Ses
     sid = start(api, h)
     e = rep(sid, 0, 0, key="the-same-key-1")
     r = send(api, h, sid, [e, dict(e)])
-    assert r.json() == {"accepted": 1, "duplicates": 1}
+    assert r.json() == {"accepted": 1, "duplicates": 1, "conflicting_duplicates": 0}
     assert stored(db) == 1
+
+
+def payload_of(db: Session, key: str) -> dict[str, Any]:
+    return dict(
+        db.scalars(select(SessionEventRow.payload).where(SessionEventRow.idempotency_key == key))
+        .one()
+        .items()
+    )
+
+
+def test_a_repeated_key_with_a_different_payload_is_a_conflicting_duplicate(
+    api: TestClient, db: Session
+) -> None:
+    """Still a duplicate (the first stored event wins, nothing is overwritten and nothing 4xx),
+    but counted separately so a buggy or malicious client is visible."""
+    h = member(api)
+    sid = start(api, h)
+    original = rep(sid, 0, 0, conf=0.9, key="conflict-key-01")
+    assert send(api, h, sid, [original]).status_code == 200
+    changed = rep(sid, 0, 0, conf=0.2, key="conflict-key-01", t=999)
+    r = send(api, h, sid, [changed])
+    assert r.status_code == 200
+    assert r.json() == {"accepted": 0, "duplicates": 1, "conflicting_duplicates": 1}
+    assert stored(db) == 1
+    assert payload_of(db, "conflict-key-01")["tracking_confidence"] == 0.9
+
+
+def test_an_identical_resend_is_not_conflicting_but_a_changed_one_in_the_same_batch_is(
+    api: TestClient, db: Session
+) -> None:
+    h = member(api)
+    sid = start(api, h)
+    same = rep(sid, 0, 0, key="same-key-00001")
+    send(api, h, sid, [same, rep(sid, 0, 1, conf=0.9, key="changing-key-01")])
+    r = send(
+        api,
+        h,
+        sid,
+        [same, rep(sid, 0, 1, conf=0.3, key="changing-key-01"), rep(sid, 0, 2)],
+    )
+    assert r.json() == {"accepted": 1, "duplicates": 2, "conflicting_duplicates": 1}
+    assert stored(db) == 3
+
+
+def test_the_same_key_twice_in_one_batch_with_different_payloads_keeps_the_first(
+    api: TestClient, db: Session
+) -> None:
+    h = member(api)
+    sid = start(api, h)
+    first = rep(sid, 0, 0, conf=0.9, key="in-batch-key-01")
+    second = rep(sid, 0, 0, conf=0.4, key="in-batch-key-01", t=500)
+    r = send(api, h, sid, [first, second])
+    assert r.json() == {"accepted": 1, "duplicates": 1, "conflicting_duplicates": 1}
+    assert payload_of(db, "in-batch-key-01")["tracking_confidence"] == 0.9
 
 
 def test_keys_are_scoped_to_their_session(api: TestClient, db: Session) -> None:
@@ -124,7 +178,7 @@ def test_a_realistic_batch_fits_the_size_cap(api: TestClient) -> None:
     h = member(api)
     sid = start(api, h)
     r = send(api, h, sid, [rep(sid, 0, i) for i in range(100)])
-    assert r.json() == {"accepted": 100, "duplicates": 0}
+    assert r.json() == {"accepted": 100, "duplicates": 0, "conflicting_duplicates": 0}
 
 
 # --- after completion ----------------------------------------------------------------------------
@@ -297,7 +351,11 @@ def test_a_resent_response_is_a_duplicate_not_an_error(api: TestClient, db: Sess
     sid = start(api, h)
     batch = [shown(sid), respond("feedback_dismissed", sid, key="dismiss-key-001")]
     send(api, h, sid, batch)
-    assert send(api, h, sid, batch).json() == {"accepted": 0, "duplicates": 2}
+    assert send(api, h, sid, batch).json() == {
+        "accepted": 0,
+        "duplicates": 2,
+        "conflicting_duplicates": 0,
+    }
     assert stored(db) == 2
 
 
@@ -499,6 +557,10 @@ def test_a_session_cannot_grow_without_bound(
     assert code(r) == "event_limit_reached"
     assert stored(db) == 4
     # a resend of what is already stored does not count against the limit
-    assert send(api, h, sid, first).json() == {"accepted": 0, "duplicates": 4}
+    assert send(api, h, sid, first).json() == {
+        "accepted": 0,
+        "duplicates": 4,
+        "conflicting_duplicates": 0,
+    }
     assert send(api, h, sid, [rep(sid, 0, 98)]).status_code == 200  # the fifth fits
     assert send(api, h, sid, [rep(sid, 0, 99)]).status_code == 409

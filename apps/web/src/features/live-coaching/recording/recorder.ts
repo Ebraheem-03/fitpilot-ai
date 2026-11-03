@@ -58,7 +58,7 @@ export const MIN_DEGRADED_MS = 1000;
 
 /**
  * Tracking issues → the contract's reasons. `no_frames` (nothing analysed for 2 s: frozen camera,
- * background tab, a struggling device) has no reason of its own; `slow_device` is the closest.
+ * background tab) is `camera_stalled`; `slow_device` means frames arrive, too few to analyse.
  */
 export const DEGRADED_REASON: Record<TrackingIssue, TrackingDegradedReason> = {
   no_person: "no_person",
@@ -67,7 +67,7 @@ export const DEGRADED_REASON: Record<TrackingIssue, TrackingDegradedReason> = {
   low_light: "low_light",
   slow_device: "slow_device",
   unsupported_view: "unsupported_view",
-  no_frames: "slow_device",
+  no_frames: "camera_stalled",
 };
 
 type Draft = { type: SessionEvent["type"] } & Record<string, unknown>;
