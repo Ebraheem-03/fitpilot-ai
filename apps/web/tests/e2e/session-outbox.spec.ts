@@ -318,7 +318,11 @@ test("stop then Start again at once: the camera waits for the slow upload, so no
   expect(uploads).toHaveLength(1); // the first set's upload, started when the camera stopped
   expect(uploads[0]!.startedAt).toBeLessThan(restartAt);
   expect(uploads[0]!.answeredAt).not.toBeNull();
-  expect(uploads[0]!.answeredAt!).toBeLessThanOrEqual(restartAt); // answered before the camera came back
+  // Answered before the camera came back. `answeredAt` is stamped by Node when the response event
+  // reaches it, `restartAt` by the page's own clock, so the two can differ by the event's delivery
+  // delay (seen: 1 ms). The upload is 2 s long, so a 100 ms allowance cannot hide a real overlap.
+  const CLOCK_SKEW_MS = 100;
+  expect(uploads[0]!.answeredAt!).toBeLessThanOrEqual(restartAt + CLOCK_SKEW_MS);
   const secondWindowEnd = Date.now();
   await page.getByRole("button", { name: "Stop camera" }).click();
   // The second camera window ran from the restart to this stop: nothing but GETs in it.

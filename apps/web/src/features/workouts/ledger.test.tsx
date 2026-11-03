@@ -197,6 +197,17 @@ describe("progress ledger is removed", () => {
       expect(order).toEqual(["discard", "signout"]);
     });
 
+    it("still offers the choice when the store couldn't be read", async () => {
+      flushBeforeSignOut.mockResolvedValue({ pending: 1, unreadable: true } as never);
+      render(<SignOutButton userId="alice" />);
+      await userEvent.click(signOutButton());
+      const choice = await screen.findByRole("alertdialog");
+      expect(choice.textContent).toContain(
+        "couldn't check whether all your workout items were sent",
+      );
+      expect(signOut).not.toHaveBeenCalled();
+    });
+
     it("is disabled (and does nothing) while the header is still loading", async () => {
       render(<SignOutButton disabled />);
       expect((signOutButton() as HTMLButtonElement).disabled).toBe(true);

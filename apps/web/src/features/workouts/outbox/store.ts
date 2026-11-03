@@ -24,6 +24,8 @@ export interface OutboxStore {
   quarantine(keys: string[], reason: string, at: number): Promise<void>;
   /** Deletes quarantined records parked before `cutoff` (epoch ms). */
   pruneQuarantined(cutoff: number): Promise<void>;
+  /** Refuse any further access (the member discarded this store); never re-creates it. */
+  close?(): void;
 }
 
 export const byQueueOrder = (a: OutboxRecord, b: OutboxRecord) =>
@@ -74,12 +76,21 @@ const txDone = (tx: IDBTransaction) =>
 /** IndexedDB-backed store: survives reloads and browser restarts. */
 export class IndexedDbStore implements OutboxStore {
   private db: Promise<IDBDatabase> | null = null;
+  private closed = false;
   constructor(
     private readonly factory: IDBFactory,
     private readonly name = "fitpilot-outbox",
   ) {}
 
+  /** After `close()` nothing opens the database again: a late write can't re-create a deleted one. */
+  close(): void {
+    this.closed = true;
+    void this.db?.then((db) => db.close()).catch(() => undefined);
+    this.db = null;
+  }
+
   private open(): Promise<IDBDatabase> {
+    if (this.closed) return Promise.reject(new Error("outbox store closed"));
     this.db ??= new Promise((resolve, reject) => {
       const req = this.factory.open(this.name, 1);
       req.onupgradeneeded = () => {

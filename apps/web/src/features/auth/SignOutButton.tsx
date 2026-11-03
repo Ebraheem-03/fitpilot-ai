@@ -15,6 +15,7 @@ const buttonClass =
  */
 export function SignOutButton({ userId, disabled }: { userId?: string; disabled?: boolean }) {
   const [unsent, setUnsent] = useState<number | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
   const [busy, startTransition] = useTransition();
   const keepRef = useRef<HTMLButtonElement>(null);
 
@@ -26,8 +27,9 @@ export function SignOutButton({ userId, disabled }: { userId?: string; disabled?
     event.preventDefault();
     startTransition(async () => {
       if (userId) {
-        const { pending } = await flushBeforeSignOut(userId);
+        const { pending, unreadable: unknown } = await flushBeforeSignOut(userId);
         if (pending > 0) {
+          setUnreadable(unknown === true);
           setUnsent(pending);
           return;
         }
@@ -63,9 +65,9 @@ export function SignOutButton({ userId, disabled }: { userId?: string; disabled?
           className="absolute top-full right-0 z-20 mt-2 flex w-72 flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-lg"
         >
           <p id="unsent-title" className="text-sm">
-            {unsent} workout {unsent === 1 ? "item hasn't" : "items haven't"} been sent yet. Keep
-            {unsent === 1 ? " it" : " them"} on this device to send next time you sign in, or
-            discard {unsent === 1 ? "it" : "them"}?
+            {unreadable
+              ? "We couldn't check whether all your workout items were sent. Keep whatever is left on this device to send next time you sign in, or discard it?"
+              : `${unsent} workout ${unsent === 1 ? "item hasn't" : "items haven't"} been sent yet. Keep ${unsent === 1 ? "it" : "them"} on this device to send next time you sign in, or discard ${unsent === 1 ? "it" : "them"}?`}
           </p>
           <div className="flex flex-wrap gap-2">
             <button
