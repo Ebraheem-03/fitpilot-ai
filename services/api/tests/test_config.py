@@ -71,3 +71,13 @@ def test_plan_generation_cap_setting() -> None:
     assert Settings(plan_generations_per_day=2).plan_generations_per_day == 2
     with pytest.raises(ValidationError):
         Settings(plan_generations_per_day=0)
+
+
+def test_an_unset_environment_is_treated_as_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Fails closed: a deployed container that forgets FITPILOT_ENV must not accept the fake planner.
+    monkeypatch.delenv("FITPILOT_ENV", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    assert Settings(_env_file=None).fitpilot_env == "production"  # type: ignore[call-arg]
+    monkeypatch.setenv("LLM_PROVIDER", "fake")
+    with pytest.raises(ValidationError, match="LLM_PROVIDER=fake is only allowed"):
+        Settings(_env_file=None)  # type: ignore[call-arg]

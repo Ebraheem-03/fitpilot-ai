@@ -13,7 +13,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=(".env", "../../.env"), extra="ignore")
 
-    fitpilot_env: str = "local"
+    # Fails closed: dev (.env.example), tests (conftest) and e2e (scripts/e2e.sh) set it explicitly.
+    fitpilot_env: str = "production"
     database_url: str = "postgresql+psycopg://fitpilot:fitpilot@localhost:5432/fitpilot"
     cors_origins: str = "http://localhost:3000"
     # Tokens are verified against this project's JWKS (ADR-0003); no shared JWT secret.

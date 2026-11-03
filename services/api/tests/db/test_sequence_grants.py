@@ -59,3 +59,49 @@ def test_no_data_api_role_has_a_grant_on_a_public_sequence(db_url: str) -> None:
             for role in created:
                 conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
         eng.dispose()
+
+
+OBJECT_ACL = text(
+    "SELECT c.relname, r.rolname FROM pg_class c "
+    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+    "CROSS JOIN LATERAL aclexplode(c.relacl) a "
+    "JOIN pg_roles r ON r.oid = a.grantee "
+    "WHERE c.relname IN ('m3_probe_table', 'm3_probe_seq') AND n.nspname = 'public' "
+    "AND r.rolname IN ('anon', 'authenticated') ORDER BY 1, 2"
+)
+
+
+def test_tables_and_sequences_created_later_get_no_data_api_grant(db_url: str) -> None:
+    """0007: Supabase's default privileges no longer hand new objects to anon/authenticated."""
+    cfg = alembic_config(db_url)
+    eng = create_engine(db_url, isolation_level="AUTOCOMMIT")
+    created: list[str] = []
+
+    def probe_acl() -> list[tuple[str, str]]:
+        with eng.connect() as conn:
+            conn.execute(text("CREATE TABLE m3_probe_table (id int)"))
+            conn.execute(text("CREATE SEQUENCE m3_probe_seq"))
+            rows = [(name, role) for name, role in conn.execute(OBJECT_ACL).all()]
+            conn.execute(text("DROP TABLE m3_probe_table"))
+            conn.execute(text("DROP SEQUENCE m3_probe_seq"))
+            return rows
+
+    try:
+        with eng.connect() as conn:
+            for role in ROLES:
+                if not conn.scalar(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": role}):
+                    conn.execute(text(f"CREATE ROLE {role} NOLOGIN"))
+                    created.append(role)
+        # simulate Supabase's defaults (what 0007's downgrade restores)
+        command.downgrade(cfg, "0006")
+        assert ("m3_probe_seq", "anon") in probe_acl(), "simulated Supabase default not applied"
+        assert ("m3_probe_table", "authenticated") in probe_acl()
+
+        command.upgrade(cfg, "head")
+        assert probe_acl() == []
+    finally:
+        command.upgrade(cfg, "head")
+        with eng.connect() as conn:
+            for role in created:
+                conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
+        eng.dispose()
