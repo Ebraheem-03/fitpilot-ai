@@ -12,5 +12,8 @@ Squat cue rules (ruleset v4, M3 S2, 2026-10-29): `squat.depth.shallow` (min knee
 - Depth: lite min knee on real reps is about 43–80°, except pexels_7117089 at 107–113°. That clip is slow, backlit and labelled full depth; the full model measures 122.7° there and emits a false shallow cue.
 - All 48 by-eye reps are `full_depth: true`. Lean was never judged by eye, because the Pexels videos were deleted and there's no ffmpeg in the environment.
 
+- Since PR #53 (2026-11-03), lean on the Pexels clips is labelled `not_judged`, and the contract rejects a judged method with empty lists. The only lean judgements are the 5 mannequin reps (`synthetic_ground_truth`). If someone removes the mannequin side fixtures, the gate's "every rule judged" check fails for lean. That's intended.
+- `/dev/capture` now writes `cue_labels` per rep (by_eye / not_judged), so new recordings don't need hand-edited labels.
+
 **Why:** a lower lean threshold can't be justified without by-eye lean labels. Every cue below 45° would land on an unjudged rep.
 **How to apply:** before changing either threshold, get recordings with by-eye `cue_labels` (shallow reps, deliberate forward lean), then bump the ruleset version and cite the gate numbers. See [[worktree-tooling-pitfalls]] for how to edit labels.
