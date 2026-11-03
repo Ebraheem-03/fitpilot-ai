@@ -1,4 +1,10 @@
-.PHONY: setup dev dev-api db test verify ci e2e api-test api-lint bench-phone
+.PHONY: setup dev dev-api db test verify ci e2e api-test api-lint bench-phone eval-ai
+
+# make eval-ai: live plan-generation eval (ADR-0006). Override e.g. `make eval-ai EFFORT=medium RUNS=1`.
+EVAL_MODEL ?= openai/gpt-oss-120b
+EFFORT ?= low
+RUNS ?= 2
+ENV_FILE ?= $(CURDIR)/.env
 
 setup:            ## install all deps (JS + Python)
 	pnpm install
@@ -38,3 +44,8 @@ bench-phone:      ## serve /dev/pose-bench on your Wi-Fi for an on-device run (A
 	cd apps/web && NEXT_PUBLIC_DEV_TOOLS=1 pnpm build
 	@printf '\nOn your phone (same Wi-Fi) open: http://%s:3300/dev/pose-bench\n\n' "$$(ipconfig getifaddr en0 || hostname -I | cut -d' ' -f1)"
 	cd apps/web && NEXT_PUBLIC_DEV_TOOLS=1 pnpm exec next start -H 0.0.0.0 -p 3300
+
+eval-ai:          ## LIVE plan-generation eval vs Groq (~2.5K tokens/plan of the 200K/day free tier); never in CI. Writes docs/evaluation/plans-<prompt_version>.{md,json}
+	cd services/api && uv run python -m app.services.evaluation.plans --mode live \
+		--model $(EVAL_MODEL) --effort $(EFFORT) --runs $(RUNS) --env-file $(ENV_FILE); \
+		status=$$?; cd $(CURDIR) && pnpm exec prettier --log-level warn --write 'docs/evaluation/plans-*.{md,json}'; exit $$status
