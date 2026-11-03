@@ -188,8 +188,13 @@ export class SessionRecorder {
     this.emit(batch);
   }
 
-  /** The set ended (stop, or the camera failed): close the open span, record the set. */
-  endSet(tMs: number, reps: number): void {
+  /**
+   * The set ended (stop, or the camera failed): close the open span, record the set. After a
+   * failure (`failed`) the next set reuses this index: the member retries the same set, and the
+   * server keeps the latest `set_completed` per index, so the abandoned attempt doesn't count as
+   * an extra set.
+   */
+  endSet(tMs: number, reps: number, opts: { failed?: boolean } = {}): void {
     if (!this.open) return;
     const batch: Draft[] = [];
     this.closeSpan(tMs, batch);
@@ -201,7 +206,7 @@ export class SessionRecorder {
     });
     this.emit(batch);
     this.open = false;
-    this.setIndex += 1;
+    if (!opts.failed) this.setIndex += 1;
   }
 
   private trackSpan(t: TrackingSnapshot, tMs: number, batch: Draft[]) {

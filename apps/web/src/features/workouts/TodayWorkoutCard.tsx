@@ -13,6 +13,8 @@ export interface PlanDayRef {
 
 const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const noop = () => () => {};
+/** Height of the card with one line of text and a button, so it is the same before and after hydration. */
+const RESERVED = "min-h-40";
 
 /** Monday = 0 … Sunday = 6 in the member's own time zone. */
 export const todayIndex = (now: Date) => (now.getDay() + 6) % 7;
@@ -53,7 +55,9 @@ export function TodayWorkoutCard({
     () => todayIndex(new Date()),
     () => null,
   );
-  if (today === null) return null;
+  // Hold the card's space until the weekday is known: content popping in above the plan moves the
+  // buttons under the member's finger (a click landing mid-hydration missed its target).
+  if (today === null) return <div aria-hidden className={RESERVED} />;
   const pick = pickDay(days, today);
   if (!pick) return null;
   const { day, isToday } = pick;
@@ -62,7 +66,7 @@ export function TodayWorkoutCard({
       aria-labelledby="today-heading"
       data-testid="today-workout"
       data-is-today={isToday}
-      className="flex flex-col gap-3 rounded-xl border border-brand p-5"
+      className={`flex flex-col gap-3 rounded-xl border border-brand p-5 ${RESERVED}`}
     >
       <h2 id="today-heading" className="text-lg font-semibold">
         {isToday ? "Today's workout" : "Your next workout"}

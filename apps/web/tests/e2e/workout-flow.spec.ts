@@ -4,7 +4,7 @@
 // camera-tracked exercise is logged by hand, which is a supported path in its own right.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { signUp, startWorkout } from "./helpers";
+import { signOut, signUp, startWorkout } from "./helpers";
 
 const runner = (page: Page) => page.getByTestId("workout-runner").filter({ visible: true });
 
@@ -149,6 +149,9 @@ test("reloading in the middle of a workout resumes where the member was", async 
 
   // From the plan page the unfinished workout is offered for resuming, not started again.
   await page.goto("/app/plan");
+  // The Today card appears once the page has hydrated (it needs the browser's weekday): wait for
+  // it so the click lands on a settled page. (It reserves its space, so nothing shifts under it.)
+  await expect(page.getByTestId("today-workout")).toBeVisible();
   await expect(page.getByTestId("resume-workout").first()).toHaveAttribute(
     "href",
     `/app/workouts/${id}`,
@@ -238,4 +241,20 @@ test("the workout runner is keyboard operable, accessible and fits a phone", asy
     )
     .toBeLessThanOrEqual(0);
   await expect(r.getByRole("button", { name: "Finish workout" })).toBeVisible();
+});
+
+test("workout progress kept on the device is per member and goes at sign-out", async ({ page }) => {
+  await planAndStart(page);
+  const keys = () =>
+    page.evaluate(() =>
+      Object.keys(localStorage).filter((k) => k.startsWith("fitpilot.workout.v1.")),
+    );
+  await logSet(page);
+  await expect.poll(keys).toHaveLength(1);
+  const [key] = await keys();
+  // fitpilot.workout.v1.<member id>.<session id>
+  expect(key).toMatch(/^fitpilot\.workout\.v1\.[0-9a-f-]{36}\.[0-9a-f-]{36}$/);
+
+  await signOut(page);
+  expect(await keys()).toEqual([]);
 });

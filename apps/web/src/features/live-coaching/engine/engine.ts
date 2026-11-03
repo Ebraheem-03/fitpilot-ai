@@ -240,7 +240,7 @@ export class LiveEngine {
       // the analyzer keeps its state: the gap rules (maxGapMs) decide whether a rep survives
       if (this.state.session.status === "loading") void this.loadModel(generation);
       else {
-        this.endSet(); // gave up: the set ends with the reps counted so far
+        this.endSet(true); // gave up: the set ends with the reps counted so far
         this.releaseCamera(); // and don't leave the camera on with nothing analysing
       }
     };
@@ -263,7 +263,7 @@ export class LiveEngine {
       source.terminate();
       this.source = null;
       this.dispatch({ type: "modelFailed" });
-      this.endSet();
+      this.endSet(true);
       this.releaseCamera();
     }
   }
@@ -388,7 +388,7 @@ export class LiveEngine {
 
   private onTrackEnded(generation: number) {
     if (generation !== this.generation) return;
-    this.endSet();
+    this.endSet(true);
     this.stopLoop();
     this.source?.terminate();
     this.source = null;
@@ -404,15 +404,18 @@ export class LiveEngine {
     this.update({ cue: null, cueProducedAt: null, events: this.recordedEvents() });
   }
 
-  /** Ends the recorded set (stop, or the camera/worker gave up); a no-op if none is open. */
-  private endSet() {
+  /**
+   * Ends the recorded set (stop, or the camera/worker gave up); a no-op if none is open. A failed
+   * set is retried under the same set index (see `SessionRecorder.endSet`).
+   */
+  private endSet(failed = false) {
     const recorder = this.recorder;
     this.cues.reset();
     if (!recorder?.setOpen) {
       if (this.state.cue) this.update({ cue: null, cueProducedAt: null });
       return;
     }
-    recorder.endSet(this.analysisTime(), this.state.reps);
+    recorder.endSet(this.analysisTime(), this.state.reps, { failed });
     this.update({ cue: null, cueProducedAt: null, events: recorder.setEvents });
   }
 

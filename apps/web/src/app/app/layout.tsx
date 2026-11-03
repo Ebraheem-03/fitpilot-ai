@@ -37,7 +37,7 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
         Skip to content
       </a>
       <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 sm:py-3">
           <Link href="/app" className="font-semibold tracking-tight text-brand">
             FitPilot
           </Link>
@@ -52,7 +52,11 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
           </Suspense>
         </div>
       </header>
-      <main id="content" tabIndex={-1} className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
+      <main
+        id="content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-4xl flex-1 px-4 py-4 sm:py-10"
+      >
         {children}
       </main>
     </>

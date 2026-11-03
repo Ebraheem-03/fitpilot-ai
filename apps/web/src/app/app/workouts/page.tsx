@@ -3,7 +3,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { HistoryList } from "@/features/workouts/HistoryList";
-import { listWorkoutSessions } from "@/lib/api";
+import { getMe, listWorkoutSessions } from "@/lib/api";
 
 export const metadata: Metadata = { title: "Your workouts · FitPilot AI" };
 
@@ -13,13 +13,16 @@ async function History({ searchParams }: Pick<PageProps<"/app/workouts">, "searc
   await connection();
   const raw = (await searchParams).page;
   const page = Math.max(1, Number.parseInt(typeof raw === "string" ? raw : "1", 10) || 1);
-  const result = await listWorkoutSessions(PAGE_SIZE, (page - 1) * PAGE_SIZE);
+  const [me, result] = await Promise.all([
+    getMe(),
+    listWorkoutSessions(PAGE_SIZE, (page - 1) * PAGE_SIZE),
+  ]);
 
   const hasNewer = page > 1;
   const hasOlder = page * PAGE_SIZE < result.total;
   return (
     <>
-      <HistoryList sessions={result.items} />
+      <HistoryList userId={me.id} sessions={result.items} />
       {(hasNewer || hasOlder) && (
         <nav aria-label="Workout pages" className="flex gap-4 text-sm font-medium">
           {hasNewer && (

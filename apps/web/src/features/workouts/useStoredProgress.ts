@@ -1,6 +1,12 @@
 "use client";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { type Progress, parseProgress, progressKey, serialiseProgress } from "./progress";
+import {
+  type Progress,
+  parseProgress,
+  progressKey,
+  progressKeyPrefix,
+  serialiseProgress,
+} from "./progress";
 
 const CHANGED = "fitpilot:workout-progress";
 
@@ -25,8 +31,9 @@ function read(key: string): string | null {
 /** Fallback for storage that refuses writes: progress then lives for this page view only. */
 const memory = new Map<string, string>();
 
-export function clearStoredProgress(sessionId: string) {
-  const key = progressKey(sessionId);
+/** Forgets one workout's progress (completed or deleted). */
+export function clearStoredProgress(userId: string, sessionId: string) {
+  const key = progressKey(userId, sessionId);
   memory.delete(key);
   try {
     window.localStorage.removeItem(key);
@@ -36,14 +43,29 @@ export function clearStoredProgress(sessionId: string) {
   window.dispatchEvent(new Event(CHANGED));
 }
 
+/** Forgets every workout's progress for this member (sign-out): nothing is left for the next person. */
+export function clearAllStoredProgress(userId: string) {
+  const prefix = progressKeyPrefix(userId);
+  for (const key of [...memory.keys()]) if (key.startsWith(prefix)) memory.delete(key);
+  try {
+    const storage = window.localStorage;
+    const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i));
+    for (const key of keys) if (key?.startsWith(prefix)) storage.removeItem(key);
+  } catch {
+    /* storage unavailable: nothing was kept there */
+  }
+  window.dispatchEvent(new Event(CHANGED));
+}
+
 /**
  * The member's progress through a workout, kept on this device (see `progress.ts`). `null` on the
  * server and during hydration, so the first client render matches the server's.
  */
 export function useStoredProgress(
+  userId: string,
   sessionId: string,
 ): [Progress | null, (update: (p: Progress) => Progress) => void] {
-  const key = progressKey(sessionId);
+  const key = progressKey(userId, sessionId);
   const raw = useSyncExternalStore(
     subscribe,
     () => read(key) ?? memory.get(key) ?? "",

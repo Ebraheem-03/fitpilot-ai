@@ -299,7 +299,7 @@ describe("WorkoutRunner: by-hand sets", () => {
 describe("WorkoutRunner: resuming", () => {
   it("picks up from the progress kept on this device", async () => {
     storage.setItem(
-      progressKey(SESSION),
+      progressKey("user-1", SESSION),
       JSON.stringify({
         exercises: {
           plank: {
@@ -320,7 +320,7 @@ describe("WorkoutRunner: resuming", () => {
 
   it("goes to finishing when everything is already done or skipped", async () => {
     storage.setItem(
-      progressKey(SESSION),
+      progressKey("user-1", SESSION),
       JSON.stringify({ exercises: { plank: { sets: [], skipped: true } } }),
     );
     renderRunner([plank]);
@@ -329,7 +329,7 @@ describe("WorkoutRunner: resuming", () => {
   });
 
   it("ignores progress that is not valid instead of crashing", async () => {
-    storage.setItem(progressKey(SESSION), "{{{");
+    storage.setItem(progressKey("user-1", SESSION), "{{{");
     renderRunner([plank]);
     expect(await screen.findByTestId("current-step")).toBeTruthy();
   });
@@ -447,7 +447,7 @@ describe("WorkoutRunner: finishing", () => {
     expect(outbox.flush.mock.invocationCallOrder.at(-1)!).toBeLessThan(
       completeSession.mock.invocationCallOrder[0]!,
     );
-    expect(storage.getItem(progressKey(SESSION))).toBeNull();
+    expect(storage.getItem(progressKey("user-1", SESSION))).toBeNull();
   });
 
   it("sends no rating or note when the member gave none", async () => {

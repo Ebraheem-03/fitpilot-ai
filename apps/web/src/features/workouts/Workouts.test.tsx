@@ -216,7 +216,7 @@ describe("HistoryList", () => {
   ];
 
   it("links completed workouts to their summary and unfinished ones to the runner", () => {
-    render(<HistoryList sessions={sessions} />);
+    render(<HistoryList userId="user-1" sessions={sessions} />);
     const [done, open] = screen.getAllByTestId("workout-item");
     expect(done!.getAttribute("data-status")).toBe("completed");
     expect(within(done!).getByRole("link").getAttribute("href")).toBe(
@@ -230,7 +230,7 @@ describe("HistoryList", () => {
   });
 
   it("asks before deleting, and Keep it cancels without calling the API", async () => {
-    render(<HistoryList sessions={sessions} />);
+    render(<HistoryList userId="user-1" sessions={sessions} />);
     const first = screen.getAllByTestId("workout-item")[0]!;
     await user.click(within(first).getByRole("button", { name: /^Delete/ }));
     const confirm = within(first).getByTestId("delete-confirm");
@@ -242,7 +242,7 @@ describe("HistoryList", () => {
 
   it("deletes after confirmation, forgets local progress and refreshes the list", async () => {
     deleteSession.mockResolvedValue({ ok: true, data: null });
-    render(<HistoryList sessions={sessions} />);
+    render(<HistoryList userId="user-1" sessions={sessions} />);
     const first = screen.getAllByTestId("workout-item")[0]!;
     await user.click(within(first).getByRole("button", { name: /^Delete/ }));
     await user.click(within(first).getByRole("button", { name: "Delete workout" }));
@@ -253,7 +253,7 @@ describe("HistoryList", () => {
 
   it("treats an already-deleted workout as deleted", async () => {
     deleteSession.mockResolvedValue({ ok: false, failure: "session_not_found" });
-    render(<HistoryList sessions={sessions} />);
+    render(<HistoryList userId="user-1" sessions={sessions} />);
     const first = screen.getAllByTestId("workout-item")[0]!;
     await user.click(within(first).getByRole("button", { name: /^Delete/ }));
     await user.click(within(first).getByRole("button", { name: "Delete workout" }));
@@ -262,7 +262,7 @@ describe("HistoryList", () => {
 
   it("keeps the confirmation open and says so when deleting fails", async () => {
     deleteSession.mockResolvedValue({ ok: false, failure: "unavailable" });
-    render(<HistoryList sessions={sessions} />);
+    render(<HistoryList userId="user-1" sessions={sessions} />);
     const first = screen.getAllByTestId("workout-item")[0]!;
     await user.click(within(first).getByRole("button", { name: /^Delete/ }));
     await user.click(within(first).getByRole("button", { name: "Delete workout" }));
@@ -274,7 +274,7 @@ describe("HistoryList", () => {
   });
 
   it("explains an empty history and points to the plan", () => {
-    render(<HistoryList sessions={[]} />);
+    render(<HistoryList userId="user-1" sessions={[]} />);
     expect(screen.getByTestId("no-workouts").textContent).toContain("haven't done a workout yet");
     expect(
       screen.getByRole("link", { name: "Start one from your plan" }).getAttribute("href"),

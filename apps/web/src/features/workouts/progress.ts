@@ -101,7 +101,13 @@ export function counts(
 
 // --- persistence ------------------------------------------------------------------------------
 
-export const progressKey = (sessionId: string) => `fitpilot.workout.v1.${sessionId}`;
+/**
+ * Storage key per member and session: on a shared device one member's progress is never read
+ * (or shown) for another, and sign-out can remove everything under the member's prefix.
+ */
+export const progressKeyPrefix = (userId: string) => `fitpilot.workout.v1.${userId}.`;
+export const progressKey = (userId: string, sessionId: string) =>
+  `${progressKeyPrefix(userId)}${sessionId}`;
 
 const isSet = (v: unknown): v is SetRecord => {
   const s = v as SetRecord | null;

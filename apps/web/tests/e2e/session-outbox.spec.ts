@@ -75,6 +75,9 @@ test("going offline mid-workout, then reconnecting, saves the set once; completi
   await startWorkout(page);
   const finished = trackUploads(page);
 
+  // Go offline only once the runner has hydrated: the page loads its script lazily in dev, and a
+  // page cut off mid-load never becomes interactive (that is a different failure than the one tested).
+  await expect(runner(page).getByTestId("camera-set")).toBeVisible();
   await context.setOffline(true);
   const reps = await logFirstSetByHand(page);
   await expect(pending(page)).toHaveAttribute("data-pending", "1", { timeout: 10_000 });
@@ -139,19 +142,29 @@ test("a tracked set with a session sends nothing while the camera runs, then sav
   await page.getByRole("button", { name: "Save my tracking data" }).click();
   await expect(page.getByTestId("tracking-consent")).toBeHidden();
 
+  // Every non-GET request (any type, any origin) with the time it started. The camera window is
+  // judged by the page's own state, not by when this test got round to flipping a flag: the
+  // upload goes out the moment the camera stops, before a Playwright click has even returned.
   const origin = new URL(page.url()).origin;
-  let cameraRunning = false;
-  const during: string[] = [];
-  const bodies: string[] = [];
+  const nonGet: { at: number; what: string; body: string; offOrigin: boolean }[] = [];
   page.on("request", (r) => {
     if (r.method() === "GET") return;
-    if (cameraRunning || new URL(r.url()).origin !== origin)
-      during.push(`${r.method()} ${r.url()}`);
-    else bodies.push(r.postData() ?? "");
+    nonGet.push({
+      at: Date.now(),
+      what: `${r.method()} ${r.url()}`,
+      body: r.postData() ?? "",
+      offOrigin: new URL(r.url()).origin !== origin,
+    });
   });
   const saved = trackUploads(page);
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>("[data-testid=live-coach]")!;
+    new MutationObserver(() => {
+      const w = window as { __stoppedAt?: number };
+      if (el.dataset.session === "stopped") w.__stoppedAt ??= Date.now();
+    }).observe(el, { attributes: true, attributeFilter: ["data-session"] });
+  });
 
-  cameraRunning = true;
   await page.getByRole("button", { name: "Start camera" }).click();
   const coach = page.getByTestId("live-coach").filter({ visible: true });
   await expect(coach).toHaveAttribute("data-session", "running", { timeout: 60_000 });
@@ -159,16 +172,37 @@ test("a tracked set with a session sends nothing while the camera runs, then sav
     "data-issue",
     "no_person",
   );
-  expect(during).toEqual([]);
+  expect(nonGet.map((r) => r.what)).toEqual([]);
   expect(saved).toEqual([]);
 
   await page.getByRole("button", { name: "Stop camera" }).click();
-  cameraRunning = false;
-  await expect.poll(() => saved.length).toBe(1);
-  const upload = bodies.find((b) => b.includes("idempotency_key"))!;
-  expect(upload).toContain("set_completed");
-  expect(upload).not.toMatch(/landmarks|"visibility"|data:image/);
-  expect(during).toEqual([]);
+  await expect
+    .poll(() => page.evaluate(() => (window as { __stoppedAt?: number }).__stoppedAt ?? 0))
+    .toBeGreaterThan(0);
+  const stoppedAt = await page.evaluate(() => (window as { __stoppedAt?: number }).__stoppedAt!);
+
+  // The set reaches the server after the camera stopped. It can go in more than one batch (the
+  // outbox flushes when the camera is released and again when the set closes), so look at all
+  // event uploads together.
+  const uploads = () => nonGet.filter((r) => r.body.includes("idempotency_key"));
+  await expect
+    .poll(() =>
+      uploads()
+        .map((u) => u.body)
+        .join("\n"),
+    )
+    .toContain("set_completed");
+  await expect.poll(() => saved.length).toBeGreaterThanOrEqual(1);
+
+  expect(nonGet.filter((r) => r.at < stoppedAt).map((r) => r.what)).toEqual([]); // silent while on
+  expect(nonGet.filter((r) => r.offOrigin).map((r) => r.what)).toEqual([]);
+  for (const u of uploads()) expect(u.body).not.toMatch(/landmarks|"visibility"|data:image/);
+  // Each event was sent once.
+  const keys = uploads().flatMap((u) =>
+    [...u.body.matchAll(/idempotency_key\\?"\s*:\s*\\?"([^"\\]+)/g)].map((m) => m[1]!),
+  );
+  expect(keys.length).toBeGreaterThan(0);
+  expect(new Set(keys).size).toBe(keys.length);
 });
 
 test("stop then Start again at once: the camera waits for the slow upload, so nothing is on the wire while it runs", async ({

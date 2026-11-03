@@ -93,7 +93,7 @@ export function WorkoutRunner({
   trackingConsent,
 }: WorkoutRunnerProps) {
   const router = useRouter();
-  const [progress, updateProgress] = useStoredProgress(sessionId);
+  const [progress, updateProgress] = useStoredProgress(userId, sessionId);
   const [consent, setConsent] = useState<Consent>(trackingConsent ? "granted" : "unknown");
   const [chosen, setChosen] = useState<{ key: string; mode: "camera" | "manual" } | null>(null);
   const [counted, setCounted] = useState<{ key: string; summary: SetSummary } | null>(null);
@@ -237,7 +237,7 @@ export function WorkoutRunner({
         ...(values.note.trim() ? { note: values.note.trim() } : {}),
       });
       if (res.ok || res.failure === "session_completed") {
-        clearStoredProgress(sessionId);
+        clearStoredProgress(userId, sessionId);
         router.push(`/app/workouts/${sessionId}/summary`);
         return;
       }

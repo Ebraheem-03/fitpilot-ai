@@ -538,4 +538,20 @@ describe("LiveEngine cues + session events (FR-06, M3 S3)", () => {
     h.track.end();
     expect(h.snap().events.at(-1)).toMatchObject({ type: "set_completed", reps: 1 });
   });
+
+  it("retrying after the camera failed reuses the set index; a normal stop moves on to the next (M3 S8)", async () => {
+    const h = cueHarness();
+    await h.engine.start();
+    await h.play(4000);
+    h.track.end(); // camera unplugged mid-set
+    expect(h.snap().session).toMatchObject({ status: "error", retryable: true });
+    await h.engine.start(); // "Try again"
+    await h.play(4000);
+    h.engine.stop();
+    await h.engine.start(); // a deliberate next set
+    await h.play(1000);
+    h.engine.stop();
+    const closes = h.recorder.events.filter((e) => e.type === "set_completed");
+    expect(closes.map((e) => e.type === "set_completed" && e.set_index)).toEqual([0, 0, 1]);
+  });
 });

@@ -218,6 +218,25 @@ def test_set_completed_is_authoritative_over_individual_rep_events(api: TestClie
     assert by_exercise(complete(api, h, sid).json())[SQUAT]["total_reps"] == 5
 
 
+def test_a_failed_camera_attempt_and_its_retry_make_one_set(api: TestClient) -> None:
+    """The web client retries a set that failed (camera unplugged, model crash) under the same set
+    index: the later `set_completed` replaces the abandoned attempt instead of adding a set."""
+    h = member(api)
+    sid = start(api, h)
+    first_attempt = [*[rep(sid, 0, i, t=10 + i) for i in range(2)], set_completed(sid, 0, 2, t=13)]
+    retry = [
+        *[rep(sid, 0, i, t=30 + i) for i in range(5)],
+        set_completed(sid, 0, 5, t=40, perceived_difficulty=6),
+    ]
+    assert send(api, h, sid, first_attempt).status_code == 200
+    assert send(api, h, sid, retry).status_code == 200
+    ex = by_exercise(complete(api, h, sid).json())[SQUAT]
+    assert [(s["set_index"], s["reps"], s["perceived_difficulty"]) for s in ex["sets"]] == [
+        (0, 5, 6)
+    ]
+    assert ex["total_reps"] == 5
+
+
 def test_exercises_with_only_cues_or_tracking_gaps_are_not_listed(api: TestClient) -> None:
     h = member(api)
     sid = start(api, h)

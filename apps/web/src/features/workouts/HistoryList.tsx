@@ -12,7 +12,13 @@ import { clearStoredProgress } from "./useStoredProgress";
  * The member's workouts, newest first, with an in-page confirmation before anything is deleted
  * (deleting removes the session's events and summary, ADR-0011 §5).
  */
-export function HistoryList({ sessions }: { sessions: WorkoutSessionBrief[] }) {
+export function HistoryList({
+  userId,
+  sessions,
+}: {
+  userId: string;
+  sessions: WorkoutSessionBrief[];
+}) {
   const router = useRouter();
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,7 +34,7 @@ export function HistoryList({ sessions }: { sessions: WorkoutSessionBrief[] }) {
     setBusy(false);
     // A workout that is already gone is as good as deleted.
     if (res && (res.ok || res.failure === "session_not_found")) {
-      clearStoredProgress(id);
+      clearStoredProgress(userId, id);
       setConfirming(null);
       setMessage("Workout deleted.");
       router.refresh();
