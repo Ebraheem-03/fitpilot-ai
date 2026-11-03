@@ -3,7 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SetSummary } from "../live-coaching/recording/summary";
-import { progressKey } from "./progress";
+import { progressKey, type ServerProgress } from "./progress";
 import type { RunnerExercise } from "./WorkoutRunner";
 
 const SESSION = "0b0f7a3e-4b1c-4a55-9d63-8f0c8d1c2a11";
@@ -139,13 +139,18 @@ const user = userEvent.setup();
 const enqueued = () => outbox.enqueue.mock.calls.flatMap((c) => c[0] as Record<string, unknown>[]);
 const runner = () => screen.getByTestId("workout-runner");
 
-function renderRunner(exercises = [plank, bridge], consent = false) {
+function renderRunner(
+  exercises = [plank, bridge],
+  consent = false,
+  serverProgress: ServerProgress | null = null,
+) {
   return render(
     <WorkoutRunner
       userId="user-1"
       sessionId={SESSION}
       exercises={exercises}
       trackingConsent={consent}
+      serverProgress={serverProgress}
     />,
   );
 }
@@ -332,6 +337,41 @@ describe("WorkoutRunner: resuming", () => {
     storage.setItem(progressKey("user-1", SESSION), "{{{");
     renderRunner([plank]);
     expect(await screen.findByTestId("current-step")).toBeTruthy();
+  });
+});
+
+describe("WorkoutRunner: ledger lost (cleared storage or another device)", () => {
+  const bridge3: RunnerExercise = { ...bridge, planned: { ...bridge.planned, sets: 3 } };
+
+  it("resumes after the sets the server holds and saves the next set under a fresh index", async () => {
+    // localStorage is empty; the server already has sets 0 and 1 of the bridge
+    renderRunner([bridge3], false, {
+      glute_bridge: { set_indexes: [0, 1], skipped: false, highest_set_index: 1 },
+    });
+    await waitFor(() => expect(runner().getAttribute("data-set-number")).toBe("3"));
+    await user.click(screen.getByRole("button", { name: "Save set" }));
+    await waitFor(() => expect(enqueued().length).toBeGreaterThan(0));
+    const logged = enqueued().filter((e) => e.type === "set_logged");
+    expect(logged.map((e) => e.set_index)).toEqual([2]);
+  });
+
+  it("never reuses the index of a camera set the server only has reps for", async () => {
+    renderRunner([bridge3], false, {
+      glute_bridge: { set_indexes: [0], skipped: false, highest_set_index: 3 },
+    });
+    await waitFor(() => expect(runner().getAttribute("data-set-number")).toBe("2"));
+    await user.click(screen.getByRole("button", { name: "Save set" }));
+    await waitFor(() => expect(enqueued().length).toBeGreaterThan(0));
+    expect(enqueued().find((e) => e.type === "set_logged")?.set_index).toBe(4);
+  });
+
+  it("shows an exercise the server says was skipped as skipped", async () => {
+    renderRunner([plank, bridge], false, {
+      plank: { set_indexes: [], skipped: true, highest_set_index: null },
+    });
+    await waitFor(() =>
+      expect(runner().getAttribute("data-current-exercise")).toBe("glute_bridge"),
+    );
   });
 });
 

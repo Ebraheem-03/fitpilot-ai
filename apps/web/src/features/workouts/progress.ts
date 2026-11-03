@@ -3,12 +3,16 @@ import type { PlannedExercise } from "@fitpilot/exercise-contracts";
 /**
  * Where the member is in a workout (FR-07: "track completed exercises and skipped exercises").
  *
- * The API exposes a session's results only after it is completed, and the outbox deletes events
- * once the server confirms them, so neither can tell the runner where to resume. This small
- * on-device ledger records what the member saved, in step with the events enqueued for the
- * server. It only drives the screen: the events are the record. Losing it (cleared storage, another
- * device) restarts the walk-through at the first exercise, and re-saving a set is harmless because
- * the server keeps the latest event for each set index (session_summary.py).
+ * The outbox deletes events once the server confirms them, so it can't tell the runner where to
+ * resume. This small on-device ledger records what the member saved, in step with the events
+ * enqueued for the server, and it only drives the screen: the events are the record.
+ *
+ * The ledger is not trusted to be complete. While a session is started the API returns the sets,
+ * skips and highest set index it has stored (`WorkoutSession.progress`), and the runner merges
+ * that in on mount (`seedFromServer`). So a cleared localStorage or a second device resumes where
+ * the server is, and the next set index is always above every index the server holds: a new set
+ * can never overwrite a stored one (the server keeps the latest event for each set index,
+ * session_summary.py).
  */
 export interface SetRecord {
   /** index the events were sent with: unique within the exercise */
@@ -21,7 +25,17 @@ export interface SetRecord {
 export interface ExerciseProgress {
   sets: SetRecord[];
   skipped: boolean;
+  /** the next set index is never below this (the server already holds indexes under it) */
+  next_floor?: number;
 }
+
+/** `progress[exercise_id]` of a started session, as the API returns it. */
+export interface ServerExerciseProgress {
+  set_indexes: number[];
+  skipped: boolean;
+  highest_set_index: number | null;
+}
+export type ServerProgress = Record<string, ServerExerciseProgress>;
 
 export interface Progress {
   exercises: Record<string, ExerciseProgress>;
@@ -48,10 +62,52 @@ export function skipExercise(progress: Progress, exerciseId: string): Progress {
   return { exercises: { ...progress.exercises, [exerciseId]: { ...current, skipped: true } } };
 }
 
-/** Index for the next set of this exercise: after every index already used. */
+/** Index for the next set of this exercise: after every index already used, here or on the server. */
 export function nextSetIndex(progress: Progress, exerciseId: string): number {
-  const sets = of(progress, exerciseId).sets;
-  return sets.length === 0 ? 0 : Math.max(...sets.map((s) => s.set_index)) + 1;
+  const { sets, next_floor } = of(progress, exerciseId);
+  const local = sets.length === 0 ? 0 : Math.max(...sets.map((s) => s.set_index)) + 1;
+  return Math.max(local, next_floor ?? 0);
+}
+
+/**
+ * Merges what the server has stored into the ledger. Sets the server holds that the ledger lacks
+ * become placeholder records (the screen needs only that they exist), a server skip is kept
+ * unless the member has since saved a set, and the next set index is raised above the server's
+ * highest. Returns the same object when nothing changes.
+ */
+export function seedFromServer(progress: Progress, server: ServerProgress | null): Progress {
+  if (!server) return progress;
+  let changed = false;
+  const exercises = { ...progress.exercises };
+  for (const [id, remote] of Object.entries(server)) {
+    if (!/^[a-z0-9_]+$/.test(id)) continue;
+    const current = of(progress, id);
+    const known = new Set(current.sets.map((s) => s.set_index));
+    const missing = remote.set_indexes.filter((i) => Number.isInteger(i) && i >= 0 && !known.has(i));
+    const sets = missing.length
+      ? [
+          ...current.sets,
+          ...missing.map((set_index) => ({
+            set_index,
+            source: "manual" as const,
+            reps: null,
+            duration_s: null,
+          })),
+        ].sort((a, b) => a.set_index - b.set_index)
+      : current.sets;
+    const skipped = current.skipped || (remote.skipped && sets.length === 0);
+    const floor = Math.max(
+      current.next_floor ?? 0,
+      remote.highest_set_index === null ? 0 : remote.highest_set_index + 1,
+    );
+    const next_floor = floor > 0 ? floor : undefined;
+    if (sets === current.sets && skipped === current.skipped && next_floor === current.next_floor) {
+      continue;
+    }
+    changed = true;
+    exercises[id] = { sets, skipped, ...(next_floor !== undefined ? { next_floor } : {}) };
+  }
+  return changed ? { exercises } : progress;
 }
 
 export type ExerciseState = "done" | "skipped" | "in_progress" | "todo";
@@ -130,7 +186,12 @@ export function parseProgress(raw: string | null): Progress {
     const exercises: Progress["exercises"] = {};
     for (const [id, value] of Object.entries(data.exercises ?? {})) {
       if (!/^[a-z0-9_]+$/.test(id) || !Array.isArray(value?.sets)) continue;
-      exercises[id] = { sets: value.sets.filter(isSet), skipped: value.skipped === true };
+      const floor = value.next_floor;
+      exercises[id] = {
+        sets: value.sets.filter(isSet),
+        skipped: value.skipped === true,
+        ...(Number.isInteger(floor) && (floor as number) > 0 ? { next_floor: floor } : {}),
+      };
     }
     return { exercises };
   } catch {

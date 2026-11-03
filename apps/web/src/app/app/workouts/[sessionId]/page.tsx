@@ -67,6 +67,7 @@ async function Workout({ params }: Pick<PageProps<"/app/workouts/[sessionId]">, 
         userId={me.id}
         sessionId={sessionId}
         exercises={exercises}
+        serverProgress={session.progress ?? null}
         trackingConsent={hasCurrentTrackingConsent(profile)}
       />
     </>
