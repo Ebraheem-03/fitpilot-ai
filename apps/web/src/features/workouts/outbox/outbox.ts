@@ -145,6 +145,17 @@ export class Outbox {
     await this.o.store.pruneQuarantined(Number.POSITIVE_INFINITY);
   }
 
+  /** Sign-out discard: stop, and make the store refuse any late access so it can't be re-created. */
+  discard(): void {
+    this.dispose();
+    this.o.store.close?.();
+  }
+
+  /** Events still waiting to be sent, oldest first (to move them to another outbox). */
+  async takePending(): Promise<SessionEvent[]> {
+    return (await this.o.store.pending()).map((r) => r.event);
+  }
+
   get isHeld(): boolean {
     return this.held;
   }
@@ -159,7 +170,12 @@ export class Outbox {
 
   /** Sends what is queued (one session, or all). Flushes are serialised; re-reading makes repeats harmless. */
   flush(sessionId?: string): Promise<FlushOutcome> {
-    const run = this.chain.then(() => this.doFlush(sessionId));
+    const run = this.chain
+      .then(() => this.doFlush(sessionId))
+      .catch((error: unknown): FlushOutcome => {
+        if (this.disposed) return "disposed"; // a discarded store refuses late writes
+        throw error;
+      });
     this.chain = run.catch(() => undefined);
     return run;
   }

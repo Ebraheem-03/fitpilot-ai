@@ -60,7 +60,7 @@ export function getOutbox(userId: string, deps: OutboxDeps = {}): Outbox {
 export async function flushBeforeSignOut(
   userId: string,
   waitMs = 3000,
-): Promise<{ pending: number }> {
+): Promise<{ pending: number; unreadable?: boolean }> {
   const outbox = getOutbox(userId);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const giveUp = new Promise<void>((resolve) => {
@@ -77,7 +77,8 @@ export async function flushBeforeSignOut(
     await outbox.discardQuarantined();
     return { pending: await outbox.pendingCount() };
   } catch {
-    return { pending: 0 }; // an unreadable store can't be offered a choice about
+    // Can't tell what is left: still offer the choice rather than silently keeping or losing it.
+    return { pending: 1, unreadable: true };
   }
 }
 
@@ -92,7 +93,7 @@ export async function discardOutbox(
 ): Promise<void> {
   discarded.add(userId);
   if (current?.userId === userId) {
-    current.outbox.dispose();
+    current.outbox.discard(); // also closes the store: an upload still in flight can't re-open it
     current = null;
   }
   const idb = deps.indexedDB ?? (typeof indexedDB === "undefined" ? undefined : indexedDB);
@@ -104,13 +105,19 @@ export async function discardOutbox(
   });
 }
 
-/** A member is signed in again (app shell mounted): their real outbox is used from here on. */
-export function resumeOutbox(userId: string): void {
+/**
+ * A member is signed in again (app shell mounted): their real outbox is used from here on. If a
+ * page got the memory-only outbox first (landing straight on a workout after a discard), what it
+ * queued is moved into the real one, never dropped.
+ */
+export async function resumeOutbox(userId: string, deps: OutboxDeps = {}): Promise<void> {
   discarded.delete(userId);
-  if (current?.userId === userId && current.volatile) {
-    current.outbox.dispose();
-    current = null;
-  }
+  if (current?.userId !== userId || !current.volatile) return;
+  const stale = current.outbox;
+  current = null; // the next getOutbox builds the persistent one
+  const events = await stale.takePending();
+  stale.dispose();
+  if (events.length) await getOutbox(userId, deps).enqueue(events);
 }
 
 export function resetOutboxForTests(): void {

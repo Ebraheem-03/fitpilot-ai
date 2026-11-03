@@ -15,16 +15,17 @@ export function LiveSessionCoach({
   ...props
 }: Omit<LiveCoachProps, "outbox" | "renderConsent"> & { userId?: string }) {
   const { sessionId } = props;
-  // Stable identity: a new port would restart the engine (and switch the camera off).
+  // Stable identity (a new port would restart the engine), but the outbox is resolved at each
+  // call: sign-in after a discard replaces the memory-only outbox with the real one, and a
+  // reference captured earlier would write to a disposed outbox.
   const outbox = useMemo<SetOutbox | undefined>(() => {
     if (sessionId === undefined || userId === undefined) return undefined;
-    const real = getOutbox(userId);
     return {
       enqueue: (events, consented) =>
-        createEventSink({ outbox: real, hasConsent: () => consented })(events),
-      holdWhile: (hold) => real.holdWhile(hold),
-      idle: () => real.idle(),
-      flush: (id) => real.flush(id),
+        createEventSink({ outbox: getOutbox(userId), hasConsent: () => consented })(events),
+      holdWhile: (hold) => getOutbox(userId).holdWhile(hold),
+      idle: () => getOutbox(userId).idle(),
+      flush: (id) => getOutbox(userId).flush(id),
     };
   }, [sessionId, userId]);
   return (

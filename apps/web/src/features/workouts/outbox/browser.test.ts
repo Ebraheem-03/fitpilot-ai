@@ -147,4 +147,52 @@ describe("sign-out on a shared device", () => {
     await getOutbox("user-a", { indexedDB: idb, send }).enqueue([event("a-set-0000011")]);
     expect(await dbNames(idb)).toContain("fitpilot-outbox-user-a");
   });
+
+  it("events enqueued after a discard but before the app shell resumes are kept, then persisted and sent", async () => {
+    const idb = new IDBFactory();
+    const sent: string[] = [];
+    const deps = {
+      indexedDB: idb,
+      send: async (_id: string, events: unknown[]) => {
+        sent.push(...(events as SessionEvent[]).map((e) => e.idempotency_key));
+        return { ok: true } as const;
+      },
+    };
+    await getOutbox("user-a", deps).enqueue([event("a-set-0000020")]);
+    await discardOutbox("user-a", { indexedDB: idb });
+
+    // same member signs back in and a page (the coach) enqueues before OutboxBoot's resume runs
+    await getOutbox("user-a", deps).enqueue([event("a-set-0000021")]);
+    await resumeOutbox("user-a", deps);
+
+    const real = getOutbox("user-a", deps);
+    expect(await real.pendingCount()).toBe(1);
+    expect(await dbNames(idb)).toContain("fitpilot-outbox-user-a"); // persisted, not memory-only
+    expect(await real.flush()).toBe("sent");
+    expect(sent).toEqual(["a-set-0000021"]);
+  });
+
+  it("an upload still in flight at discard cannot re-create the deleted database", async () => {
+    const idb = new IDBFactory();
+    let finish: (r: { ok: true }) => void = () => {};
+    const send = vi.fn(() => new Promise<{ ok: true }>((r) => (finish = r)));
+    const a = getOutbox("user-a", { indexedDB: idb, send });
+    await a.enqueue([event("a-set-0000030")]);
+    const flushing = a.flush();
+    await flushBeforeSignOut("user-a", 20); // gives up while the request is on the wire
+    await discardOutbox("user-a", { indexedDB: idb });
+
+    finish({ ok: true }); // the server answers: the outbox would now remove the record
+    await expect(flushing).resolves.toBe("disposed");
+    expect((await dbNames(idb)).filter((n) => n?.startsWith("fitpilot-outbox-"))).toEqual([]);
+  });
+
+  it("an unreadable store still gets the keep/discard choice", async () => {
+    const idb = new IDBFactory();
+    const a = getOutbox("user-a", { indexedDB: idb, send: vi.fn() });
+    vi.spyOn(a, "pendingCount").mockRejectedValue(new Error("store unreadable"));
+    const res = await flushBeforeSignOut("user-a", 20);
+    expect(res.pending).toBeGreaterThan(0);
+    expect(res.unreadable).toBe(true);
+  });
 });
