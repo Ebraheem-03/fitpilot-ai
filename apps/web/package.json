@@ -17,7 +17,7 @@
   "dependencies": {
     "@fitpilot/exercise-contracts": "workspace:*",
     "@fitpilot/exercise-rules": "workspace:*",
-    "@mediapipe/tasks-vision": "^1.1.1",
+    "@mediapipe/tasks-vision": "^1.2.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@supabase/ssr": "^0.12.7",
